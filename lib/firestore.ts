@@ -15,6 +15,7 @@ export interface Order {
   total: number
   status: OrderStatus
   createdAt: Timestamp
+  userId?: string  // 👈 added — optional so guest orders still work
 }
 
 export interface MenuItem {
@@ -90,7 +91,6 @@ export const deleteMenuItem = async (id: string) =>
 export const subscribeToCategories = (cb: (c: Category[]) => void) =>
   onSnapshot(
     collection(db, "categories"),
-    // deduplicate by slug in case of legacy duplicate docs
     s => {
       const seen = new Set<string>()
       const cats = s.docs
@@ -104,7 +104,6 @@ export const subscribeToCategories = (cb: (c: Category[]) => void) =>
     }
   )
 
-// uses setDoc with slug as ID so re-running seed never creates duplicates
 export const addCategory = async (cat: Omit<Category, "id">) =>
   setDoc(doc(db, "categories", cat.slug), cat)
 

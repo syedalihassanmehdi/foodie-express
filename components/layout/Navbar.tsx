@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/CartContext"
 import { useMenuData } from "@/lib/menuData"
+import { useUserAuth } from "@/context/UserAuthContext"
 
 export function Navbar() {
   const [search, setSearch] = useState("")
@@ -12,6 +13,7 @@ export function Navbar() {
   const [showDropdown, setShowDropdown] = useState(false)
   const { cartCount } = useCart()
   const { items, categories } = useMenuData()
+  const { user } = useUserAuth()
   const router = useRouter()
   const searchRef = useRef<HTMLDivElement>(null)
 
@@ -49,7 +51,6 @@ export function Navbar() {
     setShowDropdown(false)
   }
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -160,8 +161,6 @@ export function Navbar() {
                 boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
                 zIndex: 100,
               }}>
-
-                {/* Categories section */}
                 {previewCats.length > 0 && (
                   <div>
                     <div style={{ padding: "10px 14px 6px", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -171,12 +170,7 @@ export function Navbar() {
                       <Link key={cat.slug} href={`/menu/${cat.slug}`}
                         onClick={() => { setSearch(""); setShowDropdown(false) }}
                         className="dropdown-item"
-                        style={{
-                          display: "flex", alignItems: "center", gap: "12px",
-                          padding: "10px 14px", textDecoration: "none",
-                          transition: "background 0.15s", cursor: "pointer",
-                          backgroundColor: "transparent",
-                        }}
+                        style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", textDecoration: "none", transition: "background 0.15s", cursor: "pointer", backgroundColor: "transparent" }}
                       >
                         <div style={{ width: "38px", height: "38px", borderRadius: "10px", overflow: "hidden", flexShrink: 0 }}>
                           <img src={cat.image} alt={cat.name} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)" }} />
@@ -190,26 +184,17 @@ export function Navbar() {
                     ))}
                   </div>
                 )}
-
-                {/* Divider */}
                 {previewCats.length > 0 && previewItems.length > 0 && (
                   <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.05)", margin: "4px 0" }} />
                 )}
-
-                {/* Items section */}
                 {previewItems.length > 0 && (
                   <div>
                     <div style={{ padding: "10px 14px 6px" }}>
                       <span style={{ color: "#f97316", fontSize: "10px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>Menu Items</span>
                     </div>
                     {previewItems.map(item => (
-                      <div key={item.id}
-                        className="dropdown-item"
-                        style={{
-                          display: "flex", alignItems: "center", gap: "12px",
-                          padding: "10px 14px", transition: "background 0.15s",
-                          cursor: "pointer", backgroundColor: "transparent",
-                        }}
+                      <div key={item.id} className="dropdown-item"
+                        style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px", transition: "background 0.15s", cursor: "pointer", backgroundColor: "transparent" }}
                       >
                         <div style={{ width: "38px", height: "38px", borderRadius: "10px", overflow: "hidden", flexShrink: 0 }}>
                           <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -223,8 +208,6 @@ export function Navbar() {
                     ))}
                   </div>
                 )}
-
-                {/* View More button */}
                 {hasMore && (
                   <button onClick={handleViewMore} style={{
                     width: "100%", padding: "12px 14px",
@@ -245,6 +228,31 @@ export function Navbar() {
               </div>
             )}
           </div>
+
+          {/* Account Button */}
+          {user ? (
+            <Link href="/account" style={{
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: "36px", height: "36px", borderRadius: "50%",
+              background: "linear-gradient(135deg, #f97316, #ea580c)",
+              color: "#fff", fontWeight: 800, fontSize: "14px", textDecoration: "none",
+              boxShadow: "0 2px 8px rgba(249,115,22,0.4)", flexShrink: 0,
+            }}>
+              {user.displayName?.[0]?.toUpperCase() ?? "U"}
+            </Link>
+          ) : (
+            <Link href="/account/login" style={{
+              color: "#aaa", fontSize: "13px", fontWeight: 600, textDecoration: "none",
+              padding: "8px 16px", borderRadius: "999px",
+              border: "1px solid rgba(255,255,255,0.08)", transition: "all 0.2s",
+              whiteSpace: "nowrap",
+            }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(249,115,22,0.4)"; e.currentTarget.style.color = "#fff" }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "#aaa" }}
+            >
+              Sign In
+            </Link>
+          )}
 
           {/* Cart */}
           <Link href="/cart" style={{
@@ -332,14 +340,35 @@ export function Navbar() {
           {[["Categories", "/categories"], ["Offers", "/offers"], ["About", "/about"]].map(([label, href]) => (
             <Link key={label} href={href}
               onClick={() => setMenuOpen(false)}
-              style={{
-                color: "#aaa", textDecoration: "none", fontSize: "15px",
-                fontWeight: 600, padding: "12px 16px", borderRadius: "12px", transition: "all 0.15s",
-              }}
+              style={{ color: "#aaa", textDecoration: "none", fontSize: "15px", fontWeight: 600, padding: "12px 16px", borderRadius: "12px", transition: "all 0.15s" }}
               onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.backgroundColor = "#161616" }}
               onMouseLeave={e => { e.currentTarget.style.color = "#aaa"; e.currentTarget.style.backgroundColor = "transparent" }}
             >{label}</Link>
           ))}
+
+          {/* Mobile account link */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: "8px", paddingTop: "8px" }}>
+            {user ? (
+              <Link href="/account" onClick={() => setMenuOpen(false)}
+                style={{ display: "flex", alignItems: "center", gap: "10px", color: "#fff", textDecoration: "none", fontSize: "15px", fontWeight: 600, padding: "12px 16px", borderRadius: "12px" }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#161616" }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent" }}
+              >
+                <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "linear-gradient(135deg, #f97316, #ea580c)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: 800, color: "#fff" }}>
+                  {user.displayName?.[0]?.toUpperCase() ?? "U"}
+                </div>
+                My Account
+              </Link>
+            ) : (
+              <Link href="/account/login" onClick={() => setMenuOpen(false)}
+                style={{ color: "#f97316", textDecoration: "none", fontSize: "15px", fontWeight: 700, padding: "12px 16px", borderRadius: "12px", display: "block" }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(249,115,22,0.08)" }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent" }}
+              >
+                Sign In / Register →
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </>
