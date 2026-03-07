@@ -21,14 +21,21 @@ export function MenuGrid({ items }: { items: MenuItem[] }) {
     <div style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <MenuFilters filters={filters} onChange={setFilters} />
       {filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa" }}>
+        <div style={{ textAlign: "center", padding: "60px 0", color: "rgba(255,255,255,0.2)" }}>
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>🍽️</div>
           <p style={{ fontSize: "15px" }}>No items match your filters.</p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
-          {filtered.map(item => <MenuCard key={item.id} item={item} />)}
-        </div>
+        <>
+          <style>{`
+            .menu-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+            @media (max-width: 900px) { .menu-grid { grid-template-columns: repeat(2, 1fr); } }
+            @media (max-width: 500px) { .menu-grid { grid-template-columns: 1fr; } }
+          `}</style>
+          <div className="menu-grid">
+            {filtered.map(item => <MenuCard key={item.id} item={item} />)}
+          </div>
+        </>
       )}
     </div>
   )

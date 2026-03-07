@@ -1,5 +1,4 @@
 "use client"
-import { useState } from "react"
 
 export type Filters = {
   search: string
@@ -9,63 +8,68 @@ export type Filters = {
 
 export function MenuFilters({ filters, onChange }: { filters: Filters; onChange: (f: Filters) => void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "20px 0", flexWrap: "wrap", fontFamily: "'DM Sans', sans-serif" }}>
-      {/* Search */}
-      <div style={{ display: "flex", alignItems: "center", gap: "8px", backgroundColor: "#fff", border: "1.5px solid #e5e5e5", borderRadius: "999px", padding: "10px 18px", flex: 1, minWidth: "200px" }}>
-        <span style={{ color: "#aaa" }}>🔍</span>
-        <input
-          type="text"
-          placeholder="Find your favourite dish..."
-          value={filters.search}
-          onChange={e => onChange({ ...filters, search: e.target.value })}
-          style={{ border: "none", outline: "none", fontSize: "13px", color: "#111", width: "100%", fontFamily: "'DM Sans', sans-serif" }}
-        />
+    <>
+      <style>{`
+        .filter-bar { display: flex; align-items: center; gap: 10px; padding: 20px 0; flex-wrap: wrap; font-family: 'DM Sans', sans-serif; }
+        .filter-btn { display: flex; align-items: center; gap: 6px; padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+        .filter-select { padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; outline: none; font-family: 'DM Sans', sans-serif; transition: all 0.2s; }
+      `}</style>
+      <div className="filter-bar">
+        {/* Search */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", backgroundColor: "#161616", border: "1.5px solid rgba(255,255,255,0.08)", borderRadius: "999px", padding: "10px 18px", flex: 1, minWidth: "200px" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#555" strokeWidth="2.5">
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Find your favourite dish..."
+            value={filters.search}
+            onChange={e => onChange({ ...filters, search: e.target.value })}
+            style={{ border: "none", outline: "none", fontSize: "13px", color: "#fff", width: "100%", fontFamily: "'DM Sans', sans-serif", background: "transparent" }}
+          />
+        </div>
+
+        {/* Veg toggle */}
+        <button
+          className="filter-btn"
+          onClick={() => onChange({ ...filters, veg: !filters.veg })}
+          style={{
+            border: `1.5px solid ${filters.veg ? "rgba(34,197,94,0.4)" : "rgba(255,255,255,0.08)"}`,
+            backgroundColor: filters.veg ? "rgba(34,197,94,0.1)" : "#161616",
+            color: filters.veg ? "#4ade80" : "rgba(255,255,255,0.4)",
+          }}
+        >
+          🌿 Veg
+        </button>
+
+        {/* Sort */}
+        <select
+          className="filter-select"
+          value={filters.sort}
+          onChange={e => onChange({ ...filters, sort: e.target.value as Filters["sort"] })}
+          style={{
+            border: "1.5px solid rgba(255,255,255,0.08)",
+            backgroundColor: "#161616", color: "rgba(255,255,255,0.4)",
+          }}
+        >
+          <option value="default">💰 Price</option>
+          <option value="price-asc">Price: Low to High</option>
+          <option value="price-desc">Price: High to Low</option>
+        </select>
+
+        {/* Rating */}
+        <button
+          className="filter-btn"
+          onClick={() => onChange({ ...filters, sort: filters.sort === "rating" ? "default" : "rating" })}
+          style={{
+            border: `1.5px solid ${filters.sort === "rating" ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.08)"}`,
+            backgroundColor: filters.sort === "rating" ? "rgba(249,115,22,0.1)" : "#161616",
+            color: filters.sort === "rating" ? "#f97316" : "rgba(255,255,255,0.4)",
+          }}
+        >
+          ⭐ Rating
+        </button>
       </div>
-
-      {/* Veg toggle */}
-      <button
-        onClick={() => onChange({ ...filters, veg: !filters.veg })}
-        style={{
-          display: "flex", alignItems: "center", gap: "6px",
-          padding: "10px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 600,
-          border: `1.5px solid ${filters.veg ? "#22c55e" : "#e5e5e5"}`,
-          backgroundColor: filters.veg ? "#f0fdf4" : "#fff",
-          color: filters.veg ? "#22c55e" : "#555",
-          cursor: "pointer", transition: "all 0.2s",
-        }}
-      >
-        🌿 Veg
-      </button>
-
-      {/* Sort by Price */}
-      <select
-        value={filters.sort}
-        onChange={e => onChange({ ...filters, sort: e.target.value as Filters["sort"] })}
-        style={{
-          padding: "10px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 600,
-          border: "1.5px solid #e5e5e5", backgroundColor: "#fff", color: "#555",
-          cursor: "pointer", outline: "none", fontFamily: "'DM Sans', sans-serif",
-        }}
-      >
-        <option value="default">💰 Price</option>
-        <option value="price-asc">Price: Low to High</option>
-        <option value="price-desc">Price: High to Low</option>
-      </select>
-
-      {/* Sort by Rating */}
-      <button
-        onClick={() => onChange({ ...filters, sort: filters.sort === "rating" ? "default" : "rating" })}
-        style={{
-          display: "flex", alignItems: "center", gap: "6px",
-          padding: "10px 18px", borderRadius: "999px", fontSize: "13px", fontWeight: 600,
-          border: `1.5px solid ${filters.sort === "rating" ? "#f97316" : "#e5e5e5"}`,
-          backgroundColor: filters.sort === "rating" ? "#fff7ed" : "#fff",
-          color: filters.sort === "rating" ? "#f97316" : "#555",
-          cursor: "pointer", transition: "all 0.2s",
-        }}
-      >
-        ⭐ Rating
-      </button>
-    </div>
+    </>
   )
 }
