@@ -1,42 +1,79 @@
 "use client"
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useCart } from "@/context/CartContext"
+import { useMenuData } from "@/lib/menuData"
 
 export function Navbar() {
   const [search, setSearch] = useState("")
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
+  const [showDropdown, setShowDropdown] = useState(false)
   const { cartCount } = useCart()
+  const { items, categories } = useMenuData()
   const router = useRouter()
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  const q = search.toLowerCase().trim()
+
+  const matchedItems = q ? items.filter(i =>
+    i.name.toLowerCase().includes(q) ||
+    i.desc.toLowerCase().includes(q) ||
+    i.category.toLowerCase().includes(q)
+  ) : []
+
+  const matchedCategories = q ? categories.filter(c =>
+    c.name.toLowerCase().includes(q) ||
+    c.slug.toLowerCase().includes(q)
+  ) : []
+
+  const PREVIEW_ITEMS = 3
+  const PREVIEW_CATS = 2
+  const previewItems = matchedItems.slice(0, PREVIEW_ITEMS)
+  const previewCats = matchedCategories.slice(0, PREVIEW_CATS)
+  const hasMore = matchedItems.length > PREVIEW_ITEMS || matchedCategories.length > PREVIEW_CATS
+  const totalResults = matchedItems.length + matchedCategories.length
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && search.trim()) {
       router.push(`/search?q=${encodeURIComponent(search.trim())}`)
       setSearch("")
-      setMenuOpen(false)
+      setShowDropdown(false)
     }
   }
 
-  const handleSearchClick = () => {
-    if (search.trim()) {
-      router.push(`/search?q=${encodeURIComponent(search.trim())}`)
-      setSearch("")
-      setMenuOpen(false)
-    }
+  const handleViewMore = () => {
+    router.push(`/search?q=${encodeURIComponent(search.trim())}`)
+    setSearch("")
+    setShowDropdown(false)
   }
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  useEffect(() => {
+    setShowDropdown(q.length >= 2 && totalResults > 0)
+  }, [q, totalResults])
 
   return (
     <>
       <style>{`
         .nav-link { color: #fff; text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.2s; position: relative; }
-        .nav-link:hover { color: #fff; }
         .nav-link::after { content: ''; position: absolute; bottom: -4px; left: 0; width: 0; height: 2px; background: #f97316; transition: width 0.2s; border-radius: 2px; }
         .nav-link:hover::after { width: 100%; }
         .mobile-menu { display: none; }
         .nav-links { display: flex; align-items: center; gap: 2rem; }
         .nav-search { display: flex; }
+        .dropdown-item:hover { background: rgba(255,255,255,0.04) !important; }
         @media (max-width: 768px) {
           .nav-links { display: none; }
           .nav-search { display: none; }
@@ -78,35 +115,134 @@ export function Navbar() {
         {/* Right Side */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
 
-          {/* Search */}
-          <div className="nav-search" style={{
-            alignItems: "center", gap: "8px",
-            backgroundColor: searchFocused ? "#1f1f1f" : "#161616",
-            border: `1px solid ${searchFocused ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.06)"}`,
-            borderRadius: "999px", padding: "8px 6px 8px 16px",
-            transition: "all 0.2s",
-            boxShadow: searchFocused ? "0 0 0 3px rgba(249,115,22,0.08)" : "none",
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#f97316" : "#555"} strokeWidth="2.5" style={{ transition: "stroke 0.2s", flexShrink: 0 }}>
-              <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-            </svg>
-            <input
-              type="text"
-              placeholder="Search cravings..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={handleSearch}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "13px", width: "150px" }}
-            />
-            {search.trim() && (
-              <button onClick={handleSearchClick} style={{
-                background: "linear-gradient(135deg, #f97316, #ea580c)",
-                border: "none", borderRadius: "999px", cursor: "pointer",
-                padding: "4px 12px", color: "#fff", fontSize: "12px", fontWeight: 700,
-                flexShrink: 0,
-              }}>Go</button>
+          {/* Search with Dropdown */}
+          <div ref={searchRef} className="nav-search" style={{ position: "relative" }}>
+            <div style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              backgroundColor: searchFocused ? "#1f1f1f" : "#161616",
+              border: `1px solid ${searchFocused ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.06)"}`,
+              borderRadius: showDropdown ? "14px 14px 0 0" : "999px",
+              padding: "8px 6px 8px 16px",
+              transition: "all 0.2s",
+              boxShadow: searchFocused ? "0 0 0 3px rgba(249,115,22,0.08)" : "none",
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#f97316" : "#555"} strokeWidth="2.5" style={{ transition: "stroke 0.2s", flexShrink: 0 }}>
+                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search cravings..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={handleSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "13px", width: "150px" }}
+              />
+              {search.trim() && (
+                <button onClick={handleViewMore} style={{
+                  background: "linear-gradient(135deg, #f97316, #ea580c)",
+                  border: "none", borderRadius: "999px", cursor: "pointer",
+                  padding: "4px 12px", color: "#fff", fontSize: "12px", fontWeight: 700, flexShrink: 0,
+                }}>Go</button>
+              )}
+            </div>
+
+            {/* Dropdown */}
+            {showDropdown && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0,
+                backgroundColor: "#1a1a1a",
+                border: "1px solid rgba(255,255,255,0.08)",
+                borderTop: "1px solid rgba(249,115,22,0.2)",
+                borderRadius: "0 0 16px 16px",
+                overflow: "hidden",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+                zIndex: 100,
+              }}>
+
+                {/* Categories section */}
+                {previewCats.length > 0 && (
+                  <div>
+                    <div style={{ padding: "10px 14px 6px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ color: "#f97316", fontSize: "10px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>Categories</span>
+                    </div>
+                    {previewCats.map(cat => (
+                      <Link key={cat.slug} href={`/menu/${cat.slug}`}
+                        onClick={() => { setSearch(""); setShowDropdown(false) }}
+                        className="dropdown-item"
+                        style={{
+                          display: "flex", alignItems: "center", gap: "12px",
+                          padding: "10px 14px", textDecoration: "none",
+                          transition: "background 0.15s", cursor: "pointer",
+                          backgroundColor: "transparent",
+                        }}
+                      >
+                        <div style={{ width: "38px", height: "38px", borderRadius: "10px", overflow: "hidden", flexShrink: 0 }}>
+                          <img src={cat.image} alt={cat.name} style={{ width: "100%", height: "100%", objectFit: "cover", filter: "brightness(0.7)" }} />
+                        </div>
+                        <div>
+                          <div style={{ color: "#fff", fontWeight: 700, fontSize: "13px" }}>{cat.name}</div>
+                          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "11px" }}>{cat.items.length} items</div>
+                        </div>
+                        <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.2)", fontSize: "12px" }}>→</div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                {/* Divider */}
+                {previewCats.length > 0 && previewItems.length > 0 && (
+                  <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.05)", margin: "4px 0" }} />
+                )}
+
+                {/* Items section */}
+                {previewItems.length > 0 && (
+                  <div>
+                    <div style={{ padding: "10px 14px 6px" }}>
+                      <span style={{ color: "#f97316", fontSize: "10px", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase" }}>Menu Items</span>
+                    </div>
+                    {previewItems.map(item => (
+                      <div key={item.id}
+                        className="dropdown-item"
+                        style={{
+                          display: "flex", alignItems: "center", gap: "12px",
+                          padding: "10px 14px", transition: "background 0.15s",
+                          cursor: "pointer", backgroundColor: "transparent",
+                        }}
+                      >
+                        <div style={{ width: "38px", height: "38px", borderRadius: "10px", overflow: "hidden", flexShrink: 0 }}>
+                          <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ color: "#fff", fontWeight: 700, fontSize: "13px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
+                          <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "11px" }}>{item.category}</div>
+                        </div>
+                        <div style={{ color: "#f97316", fontWeight: 800, fontSize: "13px", flexShrink: 0 }}>${item.price.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* View More button */}
+                {hasMore && (
+                  <button onClick={handleViewMore} style={{
+                    width: "100%", padding: "12px 14px",
+                    backgroundColor: "rgba(249,115,22,0.08)",
+                    borderTop: "1px solid rgba(249,115,22,0.15)",
+                    border: "none", cursor: "pointer",
+                    color: "#f97316", fontSize: "13px", fontWeight: 700,
+                    fontFamily: "'DM Sans', sans-serif",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "6px",
+                    transition: "background 0.2s",
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = "rgba(249,115,22,0.15)")}
+                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = "rgba(249,115,22,0.08)")}
+                  >
+                    View all {totalResults} results →
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -131,8 +267,7 @@ export function Navbar() {
                 color: "#fff", width: "19px", height: "19px", borderRadius: "50%",
                 fontSize: "10px", fontWeight: 700,
                 display: "flex", alignItems: "center", justifyContent: "center",
-                border: "2px solid #0a0a0a",
-                boxShadow: "0 2px 8px rgba(249,115,22,0.5)",
+                border: "2px solid #0a0a0a", boxShadow: "0 2px 8px rgba(249,115,22,0.5)",
               }}>
                 {cartCount > 9 ? "9+" : cartCount}
               </div>
@@ -177,7 +312,6 @@ export function Navbar() {
           padding: "16px 2rem 24px", display: "flex", flexDirection: "column", gap: "4px",
           fontFamily: "'DM Sans', sans-serif",
         }}>
-          {/* Mobile Search */}
           <div style={{
             display: "flex", alignItems: "center", gap: "8px",
             backgroundColor: "#161616", border: "1px solid rgba(255,255,255,0.08)",
@@ -195,14 +329,12 @@ export function Navbar() {
               style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "14px", width: "100%" }}
             />
           </div>
-
           {[["Categories", "/categories"], ["Offers", "/offers"], ["About", "/about"]].map(([label, href]) => (
             <Link key={label} href={href}
               onClick={() => setMenuOpen(false)}
               style={{
                 color: "#aaa", textDecoration: "none", fontSize: "15px",
-                fontWeight: 600, padding: "12px 16px", borderRadius: "12px",
-                transition: "all 0.15s",
+                fontWeight: 600, padding: "12px 16px", borderRadius: "12px", transition: "all 0.15s",
               }}
               onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.backgroundColor = "#161616" }}
               onMouseLeave={e => { e.currentTarget.style.color = "#aaa"; e.currentTarget.style.backgroundColor = "transparent" }}
