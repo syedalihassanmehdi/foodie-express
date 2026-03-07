@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link"
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { useCart } from "@/context/CartContext"
 
 export function Navbar() {
@@ -8,6 +9,23 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const { cartCount } = useCart()
+  const router = useRouter()
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && search.trim()) {
+      router.push(`/search?q=${encodeURIComponent(search.trim())}`)
+      setSearch("")
+      setMenuOpen(false)
+    }
+  }
+
+  const handleSearchClick = () => {
+    if (search.trim()) {
+      router.push(`/search?q=${encodeURIComponent(search.trim())}`)
+      setSearch("")
+      setMenuOpen(false)
+    }
+  }
 
   return (
     <>
@@ -65,11 +83,11 @@ export function Navbar() {
             alignItems: "center", gap: "8px",
             backgroundColor: searchFocused ? "#1f1f1f" : "#161616",
             border: `1px solid ${searchFocused ? "rgba(249,115,22,0.4)" : "rgba(255,255,255,0.06)"}`,
-            borderRadius: "999px", padding: "8px 16px",
+            borderRadius: "999px", padding: "8px 6px 8px 16px",
             transition: "all 0.2s",
             boxShadow: searchFocused ? "0 0 0 3px rgba(249,115,22,0.08)" : "none",
           }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#f97316" : "#555"} strokeWidth="2.5" style={{ transition: "stroke 0.2s" }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={searchFocused ? "#f97316" : "#555"} strokeWidth="2.5" style={{ transition: "stroke 0.2s", flexShrink: 0 }}>
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
             </svg>
             <input
@@ -77,10 +95,19 @@ export function Navbar() {
               placeholder="Search cravings..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={handleSearch}
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
               style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "13px", width: "150px" }}
             />
+            {search.trim() && (
+              <button onClick={handleSearchClick} style={{
+                background: "linear-gradient(135deg, #f97316, #ea580c)",
+                border: "none", borderRadius: "999px", cursor: "pointer",
+                padding: "4px 12px", color: "#fff", fontSize: "12px", fontWeight: 700,
+                flexShrink: 0,
+              }}>Go</button>
+            )}
           </div>
 
           {/* Cart */}
@@ -129,8 +156,8 @@ export function Navbar() {
           {/* Mobile hamburger */}
           <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} style={{
             background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px",
-            cursor: "pointer", padding: "8px", display: "flex", flexDirection: "column",
-            gap: "4px", alignItems: "center", justifyContent: "center", width: "40px", height: "40px",
+            cursor: "pointer", padding: "8px", display: "flex",
+            alignItems: "center", justifyContent: "center", width: "40px", height: "40px",
           }}>
             {menuOpen ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -164,6 +191,7 @@ export function Navbar() {
               placeholder="Search cravings..."
               value={search}
               onChange={e => setSearch(e.target.value)}
+              onKeyDown={handleSearch}
               style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: "14px", width: "100%" }}
             />
           </div>
