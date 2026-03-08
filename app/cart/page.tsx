@@ -19,24 +19,89 @@ export default function CartPage() {
   }
 
   return (
-    <main style={{ backgroundColor: "#faf9f7", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+    <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
       <Navbar />
 
+      <style>{`
+        * { box-sizing: border-box; }
+        html, body { overflow-x: hidden; max-width: 100vw; }
+
+        .cart-grid {
+          display: grid;
+          grid-template-columns: 1fr 360px;
+          gap: 32px;
+          align-items: flex-start;
+        }
+
+        .cart-summary-mobile {
+          display: none;
+        }
+
+        .cart-summary-desktop {
+          display: block;
+        }
+
+        @media (max-width: 900px) {
+          .cart-grid {
+            grid-template-columns: 1fr;
+          }
+          .cart-summary-desktop {
+            display: none;
+          }
+          .cart-summary-mobile {
+            display: block;
+            margin-top: 8px;
+          }
+        }
+
+        .cart-instructions textarea {
+          width: 100%;
+          padding: 14px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.08);
+          font-size: 14px;
+          outline: none;
+          font-family: "'DM Sans', sans-serif";
+          color: #fff;
+          resize: vertical;
+          box-sizing: border-box;
+          background-color: #111;
+          transition: border-color 0.2s;
+        }
+
+        .cart-instructions textarea:focus {
+          border-color: rgba(249,115,22,0.5);
+        }
+      `}</style>
+
       {/* Breadcrumb */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 2rem 0", fontSize: "13px", color: "#aaa", display: "flex", gap: "6px", alignItems: "center" }}>
+      <div style={{
+        maxWidth: "1100px", margin: "0 auto",
+        padding: "20px 1.25rem 0",
+        fontSize: "13px", color: "#555",
+        display: "flex", gap: "6px", alignItems: "center",
+      }}>
         <Link href="/" style={{ color: "#f97316", textDecoration: "none" }}>Home</Link>
         <span>›</span>
-        <span style={{ color: "#111", fontWeight: 600 }}>Shopping Cart</span>
+        <span style={{ color: "#888", fontWeight: 600 }}>Shopping Cart</span>
       </div>
 
       {/* Header */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 2rem 32px" }}>
-        <h1 style={{ fontSize: "36px", fontWeight: 800, color: "#111", letterSpacing: "-1px", marginBottom: "6px" }}>Review Your Order</h1>
-        <p style={{ color: "#777", fontSize: "15px" }}>You're just one step away from delicious food.</p>
+      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "16px 1.25rem 28px" }}>
+        <h1 style={{
+          fontSize: "clamp(24px, 5vw, 36px)",
+          fontWeight: 800, color: "#fff",
+          letterSpacing: "-1px", marginBottom: "6px",
+        }}>
+          Review Your Order
+        </h1>
+        <p style={{ color: "#555", fontSize: "15px", margin: 0 }}>
+          You're just one step away from delicious food.
+        </p>
       </div>
 
       {/* Main Layout */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 2rem 80px", display: "grid", gridTemplateColumns: "1fr 360px", gap: "32px", alignItems: "flex-start" }}>
+      <div className="cart-grid" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 1.25rem 80px" }}>
 
         {/* Left */}
         <div>
@@ -47,30 +112,39 @@ export default function CartPage() {
             onRemove={remove}
           />
 
-          {/* Special Instructions - only show if cart has items */}
+          {/* Special Instructions */}
           {cart.length > 0 && (
-            <div style={{ marginTop: "24px" }}>
-              <label style={{ display: "block", fontWeight: 600, fontSize: "14px", color: "#111", marginBottom: "10px" }}>
-                Add Special Instructions
+            <div className="cart-instructions" style={{ marginTop: "24px" }}>
+              <label style={{
+                display: "block", fontWeight: 700,
+                fontSize: "13px", color: "#888",
+                textTransform: "uppercase", letterSpacing: "0.5px",
+                marginBottom: "10px",
+              }}>
+                Special Instructions
               </label>
               <textarea
                 placeholder="e.g. Please leave the parcel at the door..."
                 value={instructions}
                 onChange={e => setInstructions(e.target.value)}
                 rows={4}
-                style={{ width: "100%", padding: "14px", borderRadius: "12px", border: "1.5px solid #e5e5e5", fontSize: "14px", outline: "none", fontFamily: "'DM Sans', sans-serif", color: "#111", resize: "vertical", boxSizing: "border-box", backgroundColor: "#fff" }}
-                onFocus={e => (e.currentTarget.style.borderColor = "#f97316")}
-                onBlur={e => (e.currentTarget.style.borderColor = "#e5e5e5")}
               />
             </div>
           )}
+
+          {/* Order Summary on mobile — shown below cart */}
+          <div className="cart-summary-mobile">
+            <OrderSummary subtotal={subtotal} />
+          </div>
 
           {/* Frequently Added */}
           <FrequentlyAdded onAdd={handleAddSuggestion} />
         </div>
 
-        {/* Right - Order Summary */}
-        <OrderSummary subtotal={subtotal} />
+        {/* Right — Order Summary on desktop */}
+        <div className="cart-summary-desktop">
+          <OrderSummary subtotal={subtotal} />
+        </div>
       </div>
 
       <Footer />
