@@ -89,6 +89,7 @@ export function Navbar() {
           .nav-account-desktop { display: none; }
           .mobile-menu { display: flex; }
           .mobile-cart { display: flex; }
+          .desktop-cart { display: none; }
         }
       `}</style>
 
@@ -267,7 +268,7 @@ export function Navbar() {
           </div>
 
           {/* Cart — desktop only */}
-          <Link href="/cart" style={{
+          <Link href="/cart" className="desktop-cart" style={{
             position: "relative", display: "flex", alignItems: "center", justifyContent: "center",
             width: "42px", height: "42px", borderRadius: "12px",
             backgroundColor: "#161616", border: "1px solid rgba(255,255,255,0.06)",
