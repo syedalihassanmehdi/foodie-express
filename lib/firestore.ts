@@ -15,7 +15,7 @@ export interface Order {
   total: number
   status: OrderStatus
   createdAt: Timestamp
-  userId?: string  // 👈 added — optional so guest orders still work
+  userId?: string
 }
 
 export interface MenuItem {
@@ -49,6 +49,37 @@ export interface Offer {
   code: string
   active: boolean
   expiresAt: string
+  createdAt: Timestamp
+}
+
+export interface Bundle {
+  id: string
+  name: string
+  description: string
+  discount: number
+  active: boolean
+  categories: {
+    label: string
+    emoji: string
+    items: {
+      id: string
+      name: string
+      price: number
+      image: string
+      menuItemId: string
+    }[]
+  }[]
+  createdAt: Timestamp
+}
+
+export interface Address {
+  id: string
+  userId: string
+  label: "Home" | "Work" | "Other"
+  address: string
+  city: string
+  notes?: string
+  isDefault: boolean
   createdAt: Timestamp
 }
 
@@ -129,3 +160,41 @@ export const updateOffer = async (id: string, data: Partial<Offer>) =>
 
 export const deleteOffer = async (id: string) =>
   deleteDoc(doc(db, "offers", id))
+
+// ─── BUNDLES ──────────────────────────────────────────────────────────────────
+
+export const subscribeToBundles = (cb: (b: Bundle[]) => void) =>
+  onSnapshot(
+    query(collection(db, "bundles"), orderBy("createdAt", "desc")),
+    s => cb(s.docs.map(d => ({ id: d.id, ...d.data() } as Bundle)))
+  )
+
+export const addBundle = async (bundle: Omit<Bundle, "id" | "createdAt">) =>
+  addDoc(collection(db, "bundles"), { ...bundle, createdAt: serverTimestamp() })
+
+export const updateBundle = async (id: string, data: Partial<Bundle>) =>
+  updateDoc(doc(db, "bundles", id), data)
+
+export const deleteBundle = async (id: string) =>
+  deleteDoc(doc(db, "bundles", id))
+
+// ─── ADDRESSES ───────────────────────────────────────────────────────────────
+
+export const subscribeToAddresses = (userId: string, cb: (a: Address[]) => void) =>
+  onSnapshot(
+    query(collection(db, "addresses"), orderBy("createdAt", "desc")),
+    s => cb(
+      s.docs
+        .map(d => ({ id: d.id, ...d.data() } as Address))
+        .filter(a => a.userId === userId)
+    )
+  )
+
+export const addAddress = async (address: Omit<Address, "id" | "createdAt">) =>
+  addDoc(collection(db, "addresses"), { ...address, createdAt: serverTimestamp() })
+
+export const updateAddress = async (id: string, data: Partial<Address>) =>
+  updateDoc(doc(db, "addresses", id), data)
+
+export const deleteAddress = async (id: string) =>
+  deleteDoc(doc(db, "addresses", id))

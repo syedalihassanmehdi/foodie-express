@@ -75,21 +75,20 @@ export function Navbar() {
         .nav-link:hover::after { width: 100%; }
         .nav-links { display: flex; align-items: center; gap: 2rem; }
         .nav-search { display: flex; }
-        .nav-signin { display: flex; }
-        .nav-ordernow { display: flex; }
         .nav-account-desktop { display: flex; }
-        .mobile-menu { display: none; }
+        .desktop-cart { display: flex; }
+        .nav-ordernow { display: flex; }
         .mobile-cart { display: none; }
+        .mobile-menu { display: none; }
         .dropdown-item:hover { background: rgba(255,255,255,0.04) !important; }
         @media (max-width: 768px) {
-          .nav-links { display: none; }
-          .nav-search { display: none; }
-          .nav-signin { display: none; }
-          .nav-ordernow { display: none; }
-          .nav-account-desktop { display: none; }
-          .mobile-menu { display: flex; }
-          .mobile-cart { display: flex; }
-          .desktop-cart { display: none; }
+          .nav-links { display: none !important; }
+          .nav-search { display: none !important; }
+          .nav-account-desktop { display: none !important; }
+          .desktop-cart { display: none !important; }
+          .nav-ordernow { display: none !important; }
+          .mobile-cart { display: flex !important; }
+          .mobile-menu { display: flex !important; }
         }
       `}</style>
 
@@ -253,7 +252,7 @@ export function Navbar() {
                 {user.displayName?.[0]?.toUpperCase() ?? "U"}
               </Link>
             ) : (
-              <Link href="/account/login" className="nav-signin" style={{
+              <Link href="/account/login" style={{
                 color: "#aaa", fontSize: "13px", fontWeight: 600, textDecoration: "none",
                 padding: "8px 16px", borderRadius: "999px",
                 border: "1px solid rgba(255,255,255,0.08)", transition: "all 0.2s",
@@ -309,9 +308,10 @@ export function Navbar() {
             Order Now →
           </Link>
 
-          {/* Mobile: Cart + Hamburger */}
+          {/* Mobile Cart — hidden on desktop, shown on mobile via CSS */}
           <Link href="/cart" className="mobile-cart" style={{
-            position: "relative", alignItems: "center", justifyContent: "center",
+            position: "relative", display: "none",
+            alignItems: "center", justifyContent: "center",
             width: "40px", height: "40px", borderRadius: "10px",
             backgroundColor: "#161616", border: "1px solid rgba(255,255,255,0.06)",
             textDecoration: "none", flexShrink: 0,
@@ -334,10 +334,13 @@ export function Navbar() {
             )}
           </Link>
 
+          {/* Mobile Hamburger — hidden on desktop, shown on mobile via CSS */}
           <button className="mobile-menu" onClick={() => setMenuOpen(!menuOpen)} style={{
             background: "none", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "10px",
             cursor: "pointer", padding: "8px",
-            alignItems: "center", justifyContent: "center", width: "40px", height: "40px", flexShrink: 0,
+            display: "none",
+            alignItems: "center", justifyContent: "center",
+            width: "40px", height: "40px", flexShrink: 0,
           }}>
             {menuOpen ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -348,7 +351,7 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Dropdown */}
       {menuOpen && (
         <div style={{
           position: "fixed", top: "64px", left: 0, right: 0, zIndex: 49,
@@ -395,15 +398,14 @@ export function Navbar() {
             >{label}</Link>
           ))}
 
-          {/* Divider */}
           <div style={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)", margin: "8px 0" }} />
 
           {/* Account */}
           {user ? (
             <Link href="/account" onClick={() => setMenuOpen(false)}
               style={{ display: "flex", alignItems: "center", gap: "12px", color: "#fff", textDecoration: "none", fontSize: "15px", fontWeight: 600, padding: "12px 16px", borderRadius: "12px", transition: "all 0.15s" }}
-              onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#161616" }}
-              onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent" }}
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = "#161616"}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = "transparent"}
             >
               <div style={{ width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #f97316, #ea580c)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 800, color: "#fff", flexShrink: 0 }}>
                 {user.displayName?.[0]?.toUpperCase() ?? "U"}
@@ -427,7 +429,7 @@ export function Navbar() {
             </Link>
           )}
 
-          {/* Order Now mobile */}
+          {/* Order Now */}
           <Link href="/categories" onClick={() => setMenuOpen(false)}
             style={{
               display: "flex", alignItems: "center", justifyContent: "center",
