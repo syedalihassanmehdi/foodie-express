@@ -1,51 +1,29 @@
+// Find the main content wrapper and update marginLeft
+// Replace your existing layout with:
 "use client"
 import { useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/context/AuthContext"
-import { Sidebar } from "@/components/dashboard/Sidebar"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
-  const pathname = usePathname()
-
-  const isLoginPage = pathname === "/dashboard/login"
 
   useEffect(() => {
-    if (!loading && !user && !isLoginPage) {
-      router.push("/dashboard/login")
-    }
-  }, [user, loading, isLoginPage, router])
+    if (!loading && !user) router.push("/dashboard/login")
+  }, [user, loading, router])
 
-  // Login page — render without sidebar
-  if (isLoginPage) {
-    return <>{children}</>
-  }
+  if (loading || !user) return null
 
-  // Checking auth
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: "100vh", backgroundColor: "#0a0a0a",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        fontFamily: "'DM Sans', sans-serif",
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "32px", marginBottom: "16px" }}>🍽️</div>
-          <p style={{ color: "#555", fontSize: "14px" }}>Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Not logged in — render nothing while redirecting
-  if (!user) return null
-
-  // Logged in — render dashboard with sidebar
   return (
-    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#fafafa", fontFamily: "'DM Sans', sans-serif" }}>
-      <Sidebar />
-      <main style={{ marginLeft: "220px", flex: 1, padding: "32px", minHeight: "100vh" }}>
+    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#f9f9f9", fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @media (max-width: 768px) {
+          .dashboard-main { margin-left: 0 !important; max-width: 100% !important; padding-top: 72px !important; }
+        }
+      `}</style>
+      {/* Sidebar is rendered per page, layout just provides the shell */}
+      <main className="dashboard-main" style={{ marginLeft: "220px", flex: 1, padding: "32px", maxWidth: "calc(100% - 220px)", boxSizing: "border-box" }}>
         {children}
       </main>
     </div>

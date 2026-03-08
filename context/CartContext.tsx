@@ -18,6 +18,7 @@ type CartContextType = {
   increase: (id: string) => void
   decrease: (id: string) => void
   remove: (id: string) => void
+  clearCart: () => void  // 👈 added
   cartCount: number
   cartTotal: number
   bundleDiscount: number
@@ -46,16 +47,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const remove = (id: string) => setCart(prev => prev.filter(i => i.id !== id))
 
+  const clearCart = () => setCart([])  // 👈 added
+
   const cartCount = cart.reduce((s, i) => s + i.qty, 0)
   const cartTotal = cart.reduce((s, i) => s + i.price * i.qty, 0)
 
-  // sum savings: originalPrice - discounted price, for all bundle items
   const bundleDiscount = cart
     .filter(i => i.isBundle && i.originalPrice)
     .reduce((s, i) => s + ((i.originalPrice! - i.price) * i.qty), 0)
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, increase, decrease, remove, cartCount, cartTotal, bundleDiscount }}>
+    <CartContext.Provider value={{ cart, addToCart, increase, decrease, remove, clearCart, cartCount, cartTotal, bundleDiscount }}>  {/* 👈 added clearCart */}
       {children}
     </CartContext.Provider>
   )
