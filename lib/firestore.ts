@@ -1,6 +1,6 @@
 import {
   collection, addDoc, updateDoc, deleteDoc, doc, setDoc,
-  getDocs, onSnapshot, query, orderBy, serverTimestamp, Timestamp,
+  getDocs, onSnapshot, query, orderBy, serverTimestamp, Timestamp, where,
 } from "firebase/firestore"
 import { db } from "./firebase"
 
@@ -13,11 +13,11 @@ export interface Order {
   customerAddress: string
   items: { name: string; qty: number; price: number }[]
   total: number
-  notes?: string  
+  notes?: string
   status: OrderStatus
   createdAt: Timestamp
   userId?: string
-  promoCode?: string   
+  promoCode?: string
   discount?: number
 }
 
@@ -80,8 +80,8 @@ export interface Address {
   userId: string
   label: "Home" | "Work" | "Other"
   address: string
-  name?: string      // 👈 add
-  phone?: string     // 👈 add
+  name?: string
+  phone?: string
   city: string
   notes?: string
   isDefault: boolean
@@ -185,13 +185,14 @@ export const deleteBundle = async (id: string) =>
 
 // ─── ADDRESSES ───────────────────────────────────────────────────────────────
 
+// ✅ Fixed: use where() instead of orderBy() to avoid needing a composite index
 export const subscribeToAddresses = (userId: string, cb: (a: Address[]) => void) =>
   onSnapshot(
-    query(collection(db, "addresses"), orderBy("createdAt", "desc")),
+    query(collection(db, "addresses"), where("userId", "==", userId)),
     s => cb(
       s.docs
         .map(d => ({ id: d.id, ...d.data() } as Address))
-        .filter(a => a.userId === userId)
+        .sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0))
     )
   )
 
