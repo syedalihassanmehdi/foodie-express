@@ -1,263 +1,287 @@
 "use client"
 import { useState, useEffect } from "react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/layout/Navbar"
-import { Footer } from "@/components/layout/Footer"
-import { CustomerInfo, CustomerData } from "@/components/checkout/CustomerInfo"
-import { DeliveryDetails, DeliveryData } from "@/components/checkout/DeliveryDetails"
-import { PaymentMethod, PaymentData } from "@/components/checkout/PaymentMethod"
-import { CheckoutSummary, SummaryItem } from "@/components/checkout/CheckoutSummary"
-import { addOrder, subscribeToOffers, Offer } from "@/lib/firestore"
-import { useUserAuth } from "@/context/UserAuthContext"
 import { useCart } from "@/context/CartContext"
+import { useUserAuth } from "@/context/UserAuthContext"
+import { addOrder, subscribeToOffers, subscribeToAddresses, Offer, Address } from "@/lib/firestore"
+import { useRouter } from "next/navigation"
+import { CheckoutSummary } from "@/components/checkout/CheckoutSummary"
 
 export default function CheckoutPage() {
+  const { cart, cartTotal, clearCart, bundleDiscount } = useCart()
   const { user } = useUserAuth()
-  const { cart, clearCart } = useCart()
-  const [customer, setCustomer] = useState<CustomerData>({ fullName: "", phone: "" })
-  const [delivery, setDelivery] = useState<DeliveryData>({ address: "", notes: "" })
-  const [payment, setPayment] = useState<PaymentData>({ method: "card", cardNumber: "", expiry: "", cvv: "" })
-  const [ordered, setOrdered] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
-  // Promo code state
-  const [offers, setOffers] = useState<Offer[]>([])
+  const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [address, setAddress] = useState("")
+  const [notes, setNotes] = useState("")
+  const [placing, setPlacing] = useState(false)
+  const [placed, setPlaced] = useState(false)
   const [promoInput, setPromoInput] = useState("")
+  const [promoCode, setPromoCode] = useState("")
+  const [discount, setDiscount] = useState(0)
   const [appliedOffer, setAppliedOffer] = useState<Offer | null>(null)
   const [promoError, setPromoError] = useState("")
-  const [promoSuccess, setPromoSuccess] = useState("")
+  const [offers, setOffers] = useState<Offer[]>([])
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
+  const [addressMode, setAddressMode] = useState<"saved" | "new">("new")
+
+  useEffect(() => { return subscribeToOffers(setOffers) }, [])
 
   useEffect(() => {
-    const unsub = subscribeToOffers(all => setOffers(all.filter(o => o.active)))
-    return unsub
-  }, [])
-
-  // Build items from real cart
-  const cartItems: SummaryItem[] = cart.map(item => ({
-    id: item.id,
-    name: item.name,
-    image: item.image,
-    price: item.price,
-    qty: item.qty,
-  }))
-
-  const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.qty, 0)
-  const delivery_fee = subtotal > 0 ? 2.50 : 0
-  const tax = subtotal * 0.08
-
-  // Calculate discount
-  const getDiscount = () => {
-    if (!appliedOffer) return 0
-    if (appliedOffer.type === "percent") return subtotal * (appliedOffer.value / 100)
-    if (appliedOffer.type === "flat") return Math.min(appliedOffer.value, subtotal)
-    if (appliedOffer.type === "free_delivery") return delivery_fee
-    return 0
-  }
-
-  const discount = getDiscount()
-  const total = Math.max(0, subtotal + delivery_fee + tax - discount)
-
-  const handleApplyPromo = () => {
-    setPromoError("")
-    setPromoSuccess("")
-    const code = promoInput.trim().toUpperCase()
-    if (!code) return
-
-    const offer = offers.find(o => o.code.toUpperCase() === code)
-    if (!offer) {
-      setPromoError("Invalid promo code. Please check and try again.")
-      setAppliedOffer(null)
-      return
-    }
-
-    // Check expiry
-    if (offer.expiresAt) {
-      const expDate = new Date(offer.expiresAt)
-      expDate.setHours(23, 59, 59)
-      if (expDate < new Date()) {
-        setPromoError("This promo code has expired.")
-        setAppliedOffer(null)
-        return
+    if (!user) return
+    return subscribeToAddresses(user.uid, (addrs) => {
+      setSavedAddresses(addrs)
+      if (addrs.length > 0) {
+        setAddressMode("saved")
+        setSelectedAddressId(addrs[0].id)
+        setAddress(addrs[0].address)
+        if (addrs[0].name) setName(addrs[0].name)
+        if (addrs[0].phone) setPhone(addrs[0].phone)
       }
-    }
+    })
+  }, [user])
 
-    setAppliedOffer(offer)
-    const label =
-      offer.type === "percent" ? `${offer.value}% off applied!` :
-      offer.type === "flat" ? `$${offer.value} off applied!` :
-      offer.type === "free_delivery" ? "Free delivery applied!" :
-      "Offer applied!"
-    setPromoSuccess(`🎉 ${label}`)
+  useEffect(() => {
+    if (user?.displayName) setName(user.displayName)
+  }, [user])
+
+  const selectSavedAddress = (addr: Address) => {
+    setSelectedAddressId(addr.id)
+    setAddress(addr.address)
+    if (addr.name) setName(addr.name)
+    if (addr.phone) setPhone(addr.phone)
   }
 
-  const handleRemovePromo = () => {
-    setAppliedOffer(null)
-    setPromoInput("")
+  const applyPromo = () => {
     setPromoError("")
-    setPromoSuccess("")
+    const code = promoInput.trim().toUpperCase()
+    const offer = offers.find(o => o.code.toUpperCase() === code && o.active)
+    if (!offer) { setPromoError("Invalid or inactive promo code."); return }
+    if (offer.expiresAt && new Date(offer.expiresAt) < new Date()) { setPromoError("This code has expired."); return }
+    setPromoCode(code)
+    setAppliedOffer(offer)
+    if (offer.type === "percent") setDiscount(Math.round(cartTotal * offer.value / 100))
+    else if (offer.type === "flat") setDiscount(offer.value)
+    else if (offer.type === "free_delivery") setDiscount(0)
+    else if (offer.type === "bogo") setDiscount(Math.round(cartTotal * 0.5))
   }
+
+  const deliveryFee = appliedOffer?.type === "free_delivery" ? 0 : 2.99
+  const tax = Math.round((cartTotal - discount) * 0.08 * 100) / 100
+  const total = Math.max(0, cartTotal - discount + deliveryFee + tax - bundleDiscount)
 
   const handlePlaceOrder = async () => {
-    if (!customer.fullName || !customer.phone || !delivery.address) {
-      alert("Please fill in your name, phone, and delivery address.")
-      return
-    }
-    if (cartItems.length === 0) {
-      alert("Your cart is empty!")
-      return
-    }
-    setLoading(true)
+    if (!name || !phone || !address) return alert("Please fill in all required fields")
+    if (cart.length === 0) return alert("Your cart is empty")
+    setPlacing(true)
     try {
       await addOrder({
-        customerName: customer.fullName,
-        customerPhone: customer.phone,
-        customerAddress: delivery.address,
-        items: cartItems.map(item => ({ name: item.name, qty: item.qty, price: item.price })),
-        total: Math.round(total * 100) / 100,
+        customerName: name,
+        customerPhone: phone,
+        customerAddress: address,
+        notes,
+        items: cart.map((i) => ({ name: i.name, qty: i.qty, price: i.price })),
+        total,
         status: "pending",
+        promoCode: promoCode || undefined,
+        discount,
         userId: user?.uid ?? "guest",
       })
       clearCart()
-      setOrdered(true)
-    } catch (error) {
-      console.error("Order failed:", error)
-      alert("Something went wrong. Please try again.")
-    } finally {
-      setLoading(false)
-    }
+      setPlaced(true)
+    } catch { alert("Error placing order. Try again.") }
+    setPlacing(false)
   }
 
-  if (ordered) {
-    return (
-      <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
-        <Navbar />
-        <div style={{ maxWidth: "500px", margin: "80px auto", textAlign: "center", padding: "0 2rem" }}>
-          <div style={{ fontSize: "64px", marginBottom: "20px" }}>🎉</div>
-          <h1 style={{ fontSize: "32px", fontWeight: 800, color: "#fff", marginBottom: "12px", letterSpacing: "-1px" }}>Order Placed!</h1>
-          <p style={{ color: "#555", fontSize: "15px", marginBottom: "32px", lineHeight: 1.7 }}>
-            Thanks, {customer.fullName}! Your order is being prepared. Estimated delivery: 25–35 mins.
-          </p>
-          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-            {user && (
-              <Link href="/account/orders" style={{ backgroundColor: "#f97316", color: "#fff", padding: "14px 28px", borderRadius: "999px", fontSize: "14px", fontWeight: 700, textDecoration: "none", boxShadow: "0 0 30px rgba(249,115,22,0.3)" }}>
-                Track Order →
-              </Link>
-            )}
-            <Link href="/categories" style={{ backgroundColor: "transparent", color: "#fff", padding: "14px 28px", borderRadius: "999px", fontSize: "14px", fontWeight: 600, textDecoration: "none", border: "1px solid rgba(255,255,255,0.12)" }}>
-              Order Again
-            </Link>
-          </div>
+  if (placed) return (
+    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: "24px" }}>
+      <div style={{ textAlign: "center", maxWidth: "400px" }}>
+        <div style={{ fontSize: "64px", marginBottom: "24px" }}>🎉</div>
+        <h2 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, marginBottom: "12px" }}>Order Placed!</h2>
+        <p style={{ color: "#666", fontSize: "16px", marginBottom: "32px" }}>We're preparing your food. Estimated delivery: 30–45 min.</p>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+          {user && (
+            <button onClick={() => router.push("/account/orders")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
+              Track Order →
+            </button>
+          )}
+          <button onClick={() => router.push("/menu")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#1a1a1a", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
+            Back to Menu
+          </button>
         </div>
-        <Footer />
-      </main>
-    )
-  }
+      </div>
+    </main>
+  )
 
   return (
-    <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
-      <Navbar />
-
+    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif", padding: "32px 16px 64px" }}>
       <style>{`
         * { box-sizing: border-box; }
-        .checkout-grid { display: grid; grid-template-columns: 1fr 380px; gap: 32px; align-items: flex-start; }
-        @media (max-width: 900px) { .checkout-grid { grid-template-columns: 1fr; } }
-        .promo-input { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 10px 14px; border-radius: 10px; font-size: 14px; outline: none; font-family: 'DM Sans', sans-serif; width: 100%; transition: border-color 0.2s; box-sizing: border-box; }
-        .promo-input:focus { border-color: rgba(249,115,22,0.5); }
-        .promo-input:disabled { opacity: 0.5; }
+        .co-wrap { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
+        .addr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .name-phone { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+        @media (max-width: 860px) { .co-wrap { grid-template-columns: 1fr; } }
+        @media (max-width: 480px) { .addr-grid { grid-template-columns: 1fr; } .name-phone { grid-template-columns: 1fr; } }
       `}</style>
 
-      {/* Breadcrumb */}
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 1.25rem 0", fontSize: "13px", color: "#555", display: "flex", gap: "6px", alignItems: "center" }}>
-        <Link href="/" style={{ color: "#f97316", textDecoration: "none" }}>Home</Link>
-        <span>/</span>
-        <Link href="/cart" style={{ color: "#f97316", textDecoration: "none" }}>Cart</Link>
-        <span>/</span>
-        <span style={{ color: "#888", fontWeight: 600 }}>Checkout</span>
+      <div style={{ maxWidth: "1000px", margin: "0 auto 32px" }}>
+        <h1 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, margin: "0 0 4px" }}>Checkout</h1>
+        <p style={{ color: "#555", fontSize: "14px", margin: 0 }}>{cart.length} item{cart.length !== 1 ? "s" : ""} in your cart</p>
       </div>
 
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "20px 1.25rem 32px" }}>
-        <h1 style={{ fontSize: "clamp(24px, 5vw, 36px)", fontWeight: 800, color: "#fff", letterSpacing: "-1px", marginBottom: "6px" }}>Checkout</h1>
-        <p style={{ color: "#555", fontSize: "15px", margin: 0 }}>Finish your order and we'll start preparing your meal.</p>
-      </div>
-
-      {/* Guest warning */}
       {!user && (
-        <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 1.25rem 20px" }}>
-          <div style={{ backgroundColor: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: "12px", padding: "14px 20px" }}>
-            <span style={{ color: "#888", fontSize: "13px" }}>
-              💡 <Link href="/account/login" style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>Sign in</Link> to track your orders and view order history.
-            </span>
-          </div>
+        <div style={{ maxWidth: "1000px", margin: "0 auto 20px", backgroundColor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: "12px", padding: "14px 18px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "18px" }}>👤</span>
+          <p style={{ color: "#f97316", fontSize: "13px", margin: 0 }}>
+            <a href="/account/login" style={{ fontWeight: 700, color: "#f97316" }}>Sign in</a> to use your saved addresses and track your order.
+          </p>
         </div>
       )}
 
-      <div className="checkout-grid" style={{ maxWidth: "1100px", margin: "0 auto", padding: "0 1.25rem 80px" }}>
+      <div className="co-wrap">
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          <CustomerInfo data={customer} onChange={setCustomer} />
-          <DeliveryDetails data={delivery} onChange={setDelivery} />
-          <PaymentMethod data={payment} onChange={setPayment} />
 
-          {/* Promo Code Section */}
-          <div style={{ backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.06)", padding: "24px" }}>
-            <h3 style={{ fontWeight: 700, fontSize: "15px", color: "#fff", margin: "0 0 16px", display: "flex", alignItems: "center", gap: "8px" }}>
-              🏷️ Promo Code
-            </h3>
-
-            {appliedOffer ? (
-              <div style={{ backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "12px", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-                <div>
-                  <p style={{ color: "#22c55e", fontWeight: 700, fontSize: "14px", margin: "0 0 2px" }}>{promoSuccess}</p>
-                  <p style={{ color: "#555", fontSize: "12px", margin: 0, fontFamily: "monospace", letterSpacing: "1px" }}>{appliedOffer.code}</p>
-                </div>
-                <button onClick={handleRemovePromo} style={{ background: "none", border: "1px solid rgba(239,68,68,0.3)", color: "#ef4444", borderRadius: "8px", padding: "6px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap" }}>
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <input
-                    className="promo-input"
-                    placeholder="Enter promo code..."
-                    value={promoInput}
-                    onChange={e => { setPromoInput(e.target.value.toUpperCase()); setPromoError(""); setPromoSuccess("") }}
-                    onKeyDown={e => e.key === "Enter" && handleApplyPromo()}
-                  />
-                  <button onClick={handleApplyPromo} style={{ padding: "10px 20px", backgroundColor: "#f97316", color: "#fff", border: "none", borderRadius: "10px", fontWeight: 700, fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", whiteSpace: "nowrap", flexShrink: 0, boxShadow: "0 0 16px rgba(249,115,22,0.2)" }}>
-                    Apply
+          {/* ── SAVED ADDRESSES ── */}
+          {user && savedAddresses.length > 0 && (
+            <div style={{ backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.07)", padding: "24px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
+                <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: 0 }}>📍 Saved Addresses</h3>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button onClick={() => setAddressMode("saved")} style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer", backgroundColor: addressMode === "saved" ? "#f97316" : "rgba(255,255,255,0.07)", color: addressMode === "saved" ? "#fff" : "#888" }}>
+                    Saved
+                  </button>
+                  <button onClick={() => { setAddressMode("new"); setSelectedAddressId(null); setAddress("") }} style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer", backgroundColor: addressMode === "new" ? "#f97316" : "rgba(255,255,255,0.07)", color: addressMode === "new" ? "#fff" : "#888" }}>
+                    + New
                   </button>
                 </div>
-                {promoError && <p style={{ color: "#ef4444", fontSize: "12px", margin: "8px 0 0" }}>❌ {promoError}</p>}
-                {/* Hint — show available codes */}
-                {offers.length > 0 && !promoError && (
-                  <div style={{ display: "flex", gap: "6px", marginTop: "10px", flexWrap: "wrap" }}>
-                    {offers.slice(0, 3).map(o => (
-                      <button key={o.id} onClick={() => { setPromoInput(o.code); setPromoError(""); }}
-                        style={{ fontSize: "11px", fontWeight: 700, color: "#f97316", backgroundColor: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: "6px", padding: "3px 10px", cursor: "pointer", fontFamily: "monospace", letterSpacing: "1px" }}>
-                        {o.code}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
+              </div>
+
+              {addressMode === "saved" && (
+                <div className="addr-grid">
+                  {savedAddresses.map(addr => {
+                    const isSelected = selectedAddressId === addr.id
+                    return (
+                      <div key={addr.id} onClick={() => selectSavedAddress(addr)}
+                        style={{ padding: "14px", borderRadius: "12px", border: `1.5px solid ${isSelected ? "#f97316" : "rgba(255,255,255,0.08)"}`, backgroundColor: isSelected ? "rgba(249,115,22,0.08)" : "rgba(255,255,255,0.02)", cursor: "pointer", transition: "all 0.15s" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 700, color: "#fff" }}>{addr.label || "Home"}</span>
+                          {isSelected && <span style={{ fontSize: "11px", color: "#f97316", fontWeight: 700 }}>✓</span>}
+                        </div>
+                        <p style={{ fontSize: "12px", color: "#666", margin: "0 0 4px", lineHeight: 1.4 }}>{addr.address}</p>
+                        {addr.city && <p style={{ fontSize: "11px", color: "#555", margin: 0 }}>📍 {addr.city}</p>}
+                        {addr.phone && <p style={{ fontSize: "11px", color: "#555", margin: "2px 0 0" }}>📞 {addr.phone}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── DELIVERY DETAILS ── */}
+          {(addressMode === "new" || savedAddresses.length === 0 || !user) && (
+            <div style={{ backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.07)", padding: "24px" }}>
+              <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: "0 0 18px" }}>🚚 Delivery Details</h3>
+
+              <div className="name-phone">
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Full Name *</label>
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="John Doe"
+                    style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", fontFamily: "'DM Sans', sans-serif" }}
+                    onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Phone *</label>
+                  <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 234 567 8900"
+                    style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", fontFamily: "'DM Sans', sans-serif" }}
+                    onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "14px" }}>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Delivery Address *</label>
+                <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, City, ZIP" rows={2}
+                  style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "'DM Sans', sans-serif" }}
+                  onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                  onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>Order Notes</label>
+                <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Allergies, special requests..." rows={2}
+                  style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "'DM Sans', sans-serif" }}
+                  onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                  onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Notes only when saved address selected */}
+          {user && savedAddresses.length > 0 && addressMode === "saved" && (
+            <div style={{ backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.07)", padding: "24px" }}>
+              <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: "0 0 14px" }}>📝 Order Notes</h3>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Allergies, special requests..." rows={2}
+                style={{ width: "100%", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", resize: "vertical", fontFamily: "'DM Sans', sans-serif" }}
+                onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+              />
+            </div>
+          )}
+
+          {/* ── PROMO CODE ── */}
+          <div style={{ backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.07)", padding: "24px" }}>
+            <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: "0 0 16px" }}>🏷️ Promo Code</h3>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <input value={promoInput} onChange={e => setPromoInput(e.target.value.toUpperCase())} placeholder="Enter code..."
+                style={{ flex: 1, minWidth: "140px", padding: "11px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a", color: "#fff", fontSize: "14px", outline: "none", letterSpacing: "1px", fontFamily: "'DM Sans', sans-serif" }}
+                onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+                onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+              />
+              <button onClick={applyPromo} style={{ padding: "11px 20px", borderRadius: "10px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "14px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                Apply
+              </button>
+            </div>
+            {promoError && <p style={{ color: "#ef4444", fontSize: "12px", marginTop: "8px", margin: "8px 0 0" }}>{promoError}</p>}
+            {appliedOffer && <p style={{ color: "#10b981", fontSize: "12px", marginTop: "8px", fontWeight: 600, margin: "8px 0 0" }}>✓ "{appliedOffer.code}" applied — {appliedOffer.title}</p>}
+            {offers.filter(o => o.active && (!o.expiresAt || new Date(o.expiresAt) >= new Date())).length > 0 && (
+              <div style={{ marginTop: "12px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {offers.filter(o => o.active && (!o.expiresAt || new Date(o.expiresAt) >= new Date())).map(o => (
+                  <button key={o.id} onClick={() => { setPromoInput(o.code); setPromoError("") }}
+                    style={{ padding: "4px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, border: "1px solid rgba(249,115,22,0.3)", backgroundColor: "rgba(249,115,22,0.06)", color: "#f97316", cursor: "pointer", letterSpacing: "0.5px" }}>
+                    {o.code}
+                  </button>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Order Summary */}
+        {/* RIGHT: Summary */}
         <CheckoutSummary
-          items={cartItems}
-          onPlaceOrder={handlePlaceOrder}
-          loading={loading}
-          discount={discount}
-          appliedOffer={appliedOffer}
-          deliveryFee={delivery_fee}
-          tax={tax}
-          total={total}
-        />
+  items={cart.map(i => ({
+    id: i.id,
+    name: i.name,
+    image: i.image,
+    price: i.price,
+    qty: i.qty,
+  }))}
+  discount={discount}
+  appliedOffer={appliedOffer}
+  deliveryFee={deliveryFee}
+  tax={tax}
+  total={total}
+  onPlaceOrder={handlePlaceOrder}
+  loading={placing}
+/>
       </div>
-      <Footer />
     </main>
   )
 }

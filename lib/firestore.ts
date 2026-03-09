@@ -13,9 +13,12 @@ export interface Order {
   customerAddress: string
   items: { name: string; qty: number; price: number }[]
   total: number
+  notes?: string  
   status: OrderStatus
   createdAt: Timestamp
   userId?: string
+  promoCode?: string   
+  discount?: number
 }
 
 export interface MenuItem {
@@ -77,6 +80,8 @@ export interface Address {
   userId: string
   label: "Home" | "Work" | "Other"
   address: string
+  name?: string      // 👈 add
+  phone?: string     // 👈 add
   city: string
   notes?: string
   isDefault: boolean
