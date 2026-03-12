@@ -2,10 +2,8 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
 import { auth } from "@/lib/firebase"
 import {
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  User
+  signInWithEmailAndPassword, signOut,
+  onAuthStateChanged, User
 } from "firebase/auth"
 
 type AuthContextType = {
@@ -43,13 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         "auth/too-many-requests": "Too many attempts. Try again later.",
         "auth/invalid-email": "Please enter a valid email address.",
       }
-      setError(messages[err.code] || "Login failed. Please try again.")
-      throw err
+      const msg = messages[err.code] || "Login failed. Please try again."
+      setError(msg)
+      throw new Error(msg)
     }
   }
 
   const logout = async () => {
     await signOut(auth)
+    setUser(null)
   }
 
   return (

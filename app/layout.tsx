@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>
+      <body suppressHydrationWarning style={{ margin: 0, padding: 0, backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif" }}>
         <AuthProvider>
           <UserAuthProvider>
             <CartProvider>

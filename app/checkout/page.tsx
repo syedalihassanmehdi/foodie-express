@@ -130,7 +130,22 @@ export default function CheckoutPage() {
         userId: user?.uid ?? "guest",
       }
 
-      await addOrder(orderData)
+      await addOrder({
+        customerName: finalName,
+        customerPhone: finalPhone,
+        customerAddress: city.trim() ? `${finalAddress}, ${city.trim()}` : finalAddress,
+        notes: notes.trim(),
+        items: cart.map(i => ({
+          name: i.name,
+          qty: i.qty,
+          price: i.price,
+        })),
+        total,
+        status: "pending" as const,
+        ...(promoCode ? { promoCode } : {}),      // ✅ only include if has value
+        ...(discount > 0 ? { discount } : {}),    // ✅ only include if has value
+        userId: user?.uid ?? "guest",
+      })
       clearCart()
       setPlaced(true)
     } catch (e: any) {
