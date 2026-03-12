@@ -44,7 +44,8 @@ export default function CheckoutPage() {
         setSelectedAddressId(def.id)
         setAddress(def.address)
         setCity(def.city ?? "")
-        if (def.name) setName(def.name)
+        
+        setName(def.name ?? user?.displayName ?? "")
         if (def.phone) setPhone(def.phone)
       }
     })
@@ -58,7 +59,8 @@ export default function CheckoutPage() {
     setSelectedAddressId(addr.id)
     setAddress(addr.address)
     setCity(addr.city ?? "")
-    if (addr.name) setName(addr.name)
+    
+    setName(addr.name ?? user?.displayName ?? "")
     if (addr.phone) setPhone(addr.phone)
   }
 
@@ -87,7 +89,6 @@ export default function CheckoutPage() {
     if (cart.length === 0) return alert("Your cart is empty")
     setPlacing(true)
     try {
-      // Save address if checked — separate try so it never blocks the order
       if (saveAddress && user) {
         try {
           await addAddress({
@@ -102,9 +103,9 @@ export default function CheckoutPage() {
           console.warn("Could not save address:", e)
         }
       }
-
+  
       await addOrder({
-        customerName: name.trim(),
+        customerName: name.trim() || user?.displayName || "Guest",
         customerPhone: phone.trim(),
         customerAddress: city.trim() ? `${address.trim()}, ${city.trim()}` : address.trim(),
         notes: notes.trim(),
