@@ -4,6 +4,7 @@ import { useCart } from "@/context/CartContext"
 import { useUserAuth } from "@/context/UserAuthContext"
 import { addOrder, subscribeToOffers, subscribeToAddresses, addAddress, Offer, Address } from "@/lib/firestore"
 import { useRouter } from "next/navigation"
+import { Navbar } from "@/components/layout/Navbar"
 import { CheckoutSummary } from "@/components/checkout/CheckoutSummary"
 
 export default function CheckoutPage() {
@@ -180,6 +181,7 @@ export default function CheckoutPage() {
 
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif", padding: "32px 16px 64px" }}>
+      
       <style>{`
         * { box-sizing: border-box; }
         .co-wrap { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
@@ -192,7 +194,7 @@ export default function CheckoutPage() {
         @media (max-width: 340px) { .addr-grid { grid-template-columns: 1fr; } }
         @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
-
+          
       <div style={{ maxWidth: "1000px", margin: "0 auto 32px" }}>
         <h1 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, margin: "0 0 4px" }}>Checkout</h1>
         <p style={{ color: "#555", fontSize: "14px", margin: 0 }}>{cart.length} item{cart.length !== 1 ? "s" : ""} in your cart</p>
