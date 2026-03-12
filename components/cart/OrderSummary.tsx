@@ -1,20 +1,46 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
+import { subscribeToOffers, Offer } from "@/lib/firestore"
 
 export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: number; bundleDiscount?: number }) {
   const [promo, setPromo] = useState("")
-  const [promoApplied, setPromoApplied] = useState(false)
+  const [promoCode, setPromoCode] = useState("")
+  const [promoDiscount, setPromoDiscount] = useState(0)
+  const [appliedOffer, setAppliedOffer] = useState<Offer | null>(null)
+  const [promoError, setPromoError] = useState("")
+  const [offers, setOffers] = useState<Offer[]>([])
 
-  const delivery = subtotal > 0 ? 2.50 : 0
+  useEffect(() => { return subscribeToOffers(setOffers) }, [])
+
+  const delivery = appliedOffer?.type === "free_delivery" ? 0 : subtotal > 0 ? 2.50 : 0
   const tax = subtotal * 0.08
-  const promoDiscount = promoApplied ? subtotal * 0.1 : 0
-  const total = subtotal + delivery + tax - promoDiscount
+  const total = Math.max(0, subtotal + delivery + tax - promoDiscount - bundleDiscount)
 
   const handlePromo = () => {
-    if (promo.toLowerCase() === "save10") setPromoApplied(true)
-    else alert("Invalid promo code. Try: SAVE10")
+    setPromoError("")
+    const code = promo.trim().toUpperCase()
+    const offer = offers.find(o => o.code.toUpperCase() === code && o.active)
+    if (!offer) { setPromoError("Invalid or inactive promo code."); return }
+    if (offer.expiresAt && new Date(offer.expiresAt) < new Date()) { setPromoError("This code has expired."); return }
+
+    setPromoCode(code)
+    setAppliedOffer(offer)
+    if (offer.type === "percent") setPromoDiscount(Math.round(subtotal * offer.value / 100))
+    else if (offer.type === "flat") setPromoDiscount(offer.value)
+    else if (offer.type === "free_delivery") setPromoDiscount(0)
+    else if (offer.type === "bogo") setPromoDiscount(Math.round(subtotal * 0.5))
   }
+
+  const removePromo = () => {
+    setPromo("")
+    setPromoCode("")
+    setPromoDiscount(0)
+    setAppliedOffer(null)
+    setPromoError("")
+  }
+
+  const activeOffers = offers.filter(o => o.active && (!o.expiresAt || new Date(o.expiresAt) >= new Date()))
 
   return (
     <div style={{
@@ -61,9 +87,10 @@ export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: numbe
           {[
             ["Subtotal", `$${subtotal.toFixed(2)}`, false],
             ["Tax (8%)", `$${tax.toFixed(2)}`, false],
-            ["Delivery Fee", `$${delivery.toFixed(2)}`, false],
+            ["Delivery Fee", delivery === 0 && subtotal > 0 ? "Free 🎉" : `$${delivery.toFixed(2)}`, false],
             ...(bundleDiscount > 0 ? [["🧩 Bundle Discount", `-$${bundleDiscount.toFixed(2)}`, true]] : []),
-            ...(promoApplied ? [["Promo (SAVE10)", `-$${promoDiscount.toFixed(2)}`, true]] : []),
+            ...(promoDiscount > 0 ? [[`🏷️ Promo (${promoCode})`, `-$${promoDiscount.toFixed(2)}`, true]] : []),
+            ...(appliedOffer?.type === "free_delivery" ? [["🚚 Free Delivery", "Applied!", true]] : []),
           ].map(([label, value, isGreen]) => (
             <div key={label as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ color: isGreen ? "#22c55e" : "#555", fontSize: "14px", fontWeight: isGreen ? 600 : 400 }}>
@@ -76,8 +103,8 @@ export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: numbe
           ))}
         </div>
 
-        {/* Bundle savings callout */}
-        {bundleDiscount > 0 && (
+        {/* Savings callouts */}
+        {(bundleDiscount > 0 || promoDiscount > 0) && (
           <div style={{
             backgroundColor: "rgba(34,197,94,0.08)",
             border: "1px solid rgba(34,197,94,0.2)",
@@ -86,7 +113,7 @@ export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: numbe
           }}>
             <span style={{ fontSize: "16px" }}>🎉</span>
             <span style={{ fontSize: "12px", color: "#22c55e", fontWeight: 600 }}>
-              You're saving ${bundleDiscount.toFixed(2)} with your bundle!
+              You're saving ${(bundleDiscount + promoDiscount).toFixed(2)} on this order!
             </span>
           </div>
         )}
@@ -112,37 +139,64 @@ export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: numbe
           }}>
             Promo Code
           </label>
-          <div style={{ display: "flex", gap: "8px" }}>
-            <input
-              type="text"
-              placeholder="Enter code"
-              value={promo}
-              onChange={e => setPromo(e.target.value)}
-              disabled={promoApplied}
-              className="summary-input"
-              onKeyDown={e => e.key === "Enter" && handlePromo()}
-            />
-            <button
-              onClick={handlePromo}
-              disabled={promoApplied}
-              style={{
-                padding: "10px 16px",
-                backgroundColor: promoApplied ? "#22c55e" : "#f97316",
-                color: "#fff", border: "none", borderRadius: "10px",
-                fontWeight: 700, fontSize: "13px",
-                cursor: promoApplied ? "default" : "pointer",
-                fontFamily: "'DM Sans', sans-serif",
-                transition: "background 0.2s", whiteSpace: "nowrap",
-                flexShrink: 0,
-              }}
-              onMouseEnter={e => { if (!promoApplied) e.currentTarget.style.backgroundColor = "#ea6c0a" }}
-              onMouseLeave={e => { if (!promoApplied) e.currentTarget.style.backgroundColor = promoApplied ? "#22c55e" : "#f97316" }}
-            >
-              {promoApplied ? "✓ Applied" : "Apply"}
-            </button>
-          </div>
-          {!promoApplied && (
-            <p style={{ color: "#444", fontSize: "11px", margin: "6px 0 0" }}>Try: SAVE10</p>
+
+          {appliedOffer ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: "10px", backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ color: "#22c55e", fontSize: "14px" }}>✓</span>
+                <div>
+                  <span style={{ color: "#22c55e", fontSize: "13px", fontWeight: 700 }}>{appliedOffer.code}</span>
+                  <span style={{ color: "#555", fontSize: "12px", marginLeft: "6px" }}>{appliedOffer.title}</span>
+                </div>
+              </div>
+              <button onClick={removePromo} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", padding: "2px 6px" }}>
+                ✕
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  placeholder="Enter code"
+                  value={promo}
+                  onChange={e => { setPromo(e.target.value.toUpperCase()); setPromoError("") }}
+                  className="summary-input"
+                  onKeyDown={e => e.key === "Enter" && handlePromo()}
+                />
+                <button
+                  onClick={handlePromo}
+                  style={{
+                    padding: "10px 16px",
+                    backgroundColor: "#f97316",
+                    color: "#fff", border: "none", borderRadius: "10px",
+                    fontWeight: 700, fontSize: "13px",
+                    cursor: "pointer",
+                    fontFamily: "'DM Sans', sans-serif",
+                    transition: "background 0.2s", whiteSpace: "nowrap",
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = "#ea6c0a"}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = "#f97316"}
+                >
+                  Apply
+                </button>
+              </div>
+              {promoError && (
+                <p style={{ color: "#ef4444", fontSize: "12px", margin: "6px 0 0" }}>{promoError}</p>
+              )}
+              {/* Quick-apply offer chips */}
+              {activeOffers.length > 0 && (
+                <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                  {activeOffers.map(o => (
+                    <button key={o.id} onClick={() => { setPromo(o.code); setPromoError("") }}
+                      style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, border: "1px solid rgba(249,115,22,0.3)", backgroundColor: "rgba(249,115,22,0.06)", color: "#f97316", cursor: "pointer", letterSpacing: "0.5px", fontFamily: "'DM Sans', sans-serif" }}>
+                      {o.code}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 

@@ -34,7 +34,6 @@ const statusLabel: Record<string, string> = {
   cancelled: "❌ Cancelled",
 }
 
-// Returns seconds remaining in the 2min cancel window, or 0 if expired
 const getSecondsLeft = (createdAt: any): number => {
   if (!createdAt?.toDate) return 0
   const created = createdAt.toDate().getTime()
@@ -49,7 +48,6 @@ const formatTime = (seconds: number): string => {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-// Timer component per order
 function CancelTimer({ order, onCancel, cancelling }: {
   order: Order
   onCancel: (id: string) => void
@@ -77,7 +75,6 @@ function CancelTimer({ order, onCancel, cancelling }: {
     <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
       {canCancel ? (
         <>
-          {/* Timer pill */}
           <div style={{
             display: "flex", alignItems: "center", gap: "6px",
             backgroundColor: `${urgentColor}12`,
@@ -94,7 +91,6 @@ function CancelTimer({ order, onCancel, cancelling }: {
             </span>
           </div>
 
-          {/* Cancel button */}
           <button
             onClick={() => onCancel(order.id)}
             disabled={isCancelling}
@@ -114,7 +110,6 @@ function CancelTimer({ order, onCancel, cancelling }: {
           </button>
         </>
       ) : (
-        // Timer expired
         <div style={{
           display: "flex", alignItems: "center", gap: "6px",
           backgroundColor: "rgba(255,255,255,0.03)",
@@ -131,6 +126,107 @@ function CancelTimer({ order, onCancel, cancelling }: {
   )
 }
 
+// ── Guest Order Lookup ─────────────────────────────────────────────────────────
+
+function GuestOrderLookup({ onFound }: { onFound: (orders: Order[]) => void }) {
+  const [phone, setPhone] = useState("")
+  const [searching, setSearching] = useState(false)
+  const [notFound, setNotFound] = useState(false)
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "12px 16px", borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.08)", backgroundColor: "#1a1a1a",
+    color: "#fff", fontSize: "14px", outline: "none",
+    fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
+  }
+
+  const handleSearch = async () => {
+    const trimmed = phone.trim()
+    if (!trimmed) return
+    setSearching(true)
+    setNotFound(false)
+
+    try {
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", "guest"),
+        where("customerPhone", "==", trimmed),
+        orderBy("createdAt", "desc")
+      )
+      // Use a one-time get via onSnapshot
+      const unsub = onSnapshot(q, snap => {
+        unsub()
+        const found = snap.docs.map(d => ({ id: d.id, ...d.data() } as Order))
+        if (found.length === 0) setNotFound(true)
+        else onFound(found)
+        setSearching(false)
+      })
+    } catch (e) {
+      console.error(e)
+      setSearching(false)
+      setNotFound(true)
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: "460px", margin: "0 auto", textAlign: "center", padding: "60px 1.25rem 80px" }}>
+      <div style={{ fontSize: "48px", marginBottom: "20px" }}>📦</div>
+      <h2 style={{ color: "#fff", fontSize: "22px", fontWeight: 800, marginBottom: "8px" }}>Track Your Order</h2>
+      <p style={{ color: "#555", fontSize: "14px", marginBottom: "32px", lineHeight: 1.6 }}>
+        Enter the phone number you used when placing your order to see your recent orders.
+      </p>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px", textAlign: "left", marginBottom: "16px" }}>
+        <label style={{ fontSize: "11px", fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Phone Number
+        </label>
+        <input
+          value={phone}
+          onChange={e => { setPhone(e.target.value); setNotFound(false) }}
+          onKeyDown={e => e.key === "Enter" && handleSearch()}
+          placeholder="+92 300 0000000"
+          style={inputStyle}
+          onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
+          onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
+        />
+      </div>
+
+      {notFound && (
+        <p style={{ color: "#ef4444", fontSize: "13px", marginBottom: "12px" }}>
+          No orders found for that phone number.
+        </p>
+      )}
+
+      <button
+        onClick={handleSearch}
+        disabled={searching || !phone.trim()}
+        style={{
+          width: "100%", padding: "13px", borderRadius: "999px",
+          backgroundColor: "#f97316", color: "#fff", border: "none",
+          fontWeight: 700, fontSize: "15px", cursor: searching ? "not-allowed" : "pointer",
+          fontFamily: "'DM Sans', sans-serif", opacity: !phone.trim() ? 0.5 : 1,
+          transition: "all 0.2s",
+        }}
+      >
+        {searching ? "Searching..." : "Find My Orders →"}
+      </button>
+
+      <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <p style={{ color: "#444", fontSize: "13px", marginBottom: "12px" }}>
+          Want to track orders easily next time?
+        </p>
+        <Link href="/account/signup" style={{
+          color: "#f97316", fontWeight: 700, fontSize: "13px", textDecoration: "none",
+        }}>
+          Create a free account →
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function OrdersPage() {
   const { user, loading } = useUserAuth()
   const router = useRouter()
@@ -138,13 +234,13 @@ export default function OrdersPage() {
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [cancelling, setCancelling] = useState<string | null>(null)
   const [cancelled, setCancelled] = useState(false)
+  const [guestOrders, setGuestOrders] = useState<Order[] | null>(null)
 
+  // Load orders for logged-in users
   useEffect(() => {
-    if (!loading && !user) router.push("/account/login")
-  }, [user, loading])
+    if (loading) return
+    if (!user) { setOrdersLoading(false); return }
 
-  useEffect(() => {
-    if (!user) return
     const q = query(
       collection(db, "orders"),
       where("userId", "==", user.uid),
@@ -155,21 +251,20 @@ export default function OrdersPage() {
       setOrdersLoading(false)
     })
     return unsub
-  }, [user])
+  }, [user, loading])
 
   const handleCancel = async (orderId: string) => {
-    // Double check timer on click
-    const order = orders.find(o => o.id === orderId)
+    const orderList = user ? orders : (guestOrders ?? [])
+    const order = orderList.find(o => o.id === orderId)
     if (!order) return
     if (getSecondsLeft(order.createdAt) <= 0) {
       alert("Cancellation window has expired. This order can no longer be cancelled.")
       return
     }
-
     setCancelling(orderId)
     try {
       await updateDoc(doc(db, "orders", orderId), { status: "cancelled" })
-      setCancelled(true) // ✅ clear the page
+      setCancelled(true)
     } catch (e) {
       console.error(e)
     } finally {
@@ -177,52 +272,109 @@ export default function OrdersPage() {
     }
   }
 
-  if (loading || !user) return (
+  // Loading spinner
+  if (loading) return (
     <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "32px", height: "32px", border: "3px solid rgba(249,115,22,0.2)", borderTopColor: "#f97316", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </main>
   )
 
-  // ✅ Cancelled confirmation screen
+  // Cancellation confirmation screen
   if (cancelled) return (
-    <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ textAlign: "center", maxWidth: "380px", padding: "24px" }}>
-        <div style={{ fontSize: "64px", marginBottom: "24px" }}>😔</div>
-        <h2 style={{ color: "#fff", fontSize: "24px", fontWeight: 800, marginBottom: "12px" }}>Order Cancelled</h2>
-        <p style={{ color: "#555", fontSize: "14px", marginBottom: "32px", lineHeight: 1.6 }}>
-          Your order has been cancelled successfully. We hope to serve you again soon!
-        </p>
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-          <button
-            onClick={() => setCancelled(false)}
-            style={{ padding: "12px 24px", borderRadius: "999px", backgroundColor: "rgba(255,255,255,0.05)", color: "#888", border: "1px solid rgba(255,255,255,0.08)", fontWeight: 700, fontSize: "14px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-          >
-            View Orders
-          </button>
-          <button
-            onClick={() => router.push("/menu")}
-            style={{ padding: "12px 24px", borderRadius: "999px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "14px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
-          >
-            Order Again →
-          </button>
+    <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+      <Navbar />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 64px)" }}>
+        <div style={{ textAlign: "center", maxWidth: "380px", padding: "24px" }}>
+          <div style={{ fontSize: "64px", marginBottom: "24px" }}>😔</div>
+          <h2 style={{ color: "#fff", fontSize: "24px", fontWeight: 800, marginBottom: "12px" }}>Order Cancelled</h2>
+          <p style={{ color: "#555", fontSize: "14px", marginBottom: "32px", lineHeight: 1.6 }}>
+            Your order has been cancelled successfully. We hope to serve you again soon!
+          </p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setCancelled(false)}
+              style={{ padding: "12px 24px", borderRadius: "999px", backgroundColor: "rgba(255,255,255,0.05)", color: "#888", border: "1px solid rgba(255,255,255,0.08)", fontWeight: 700, fontSize: "14px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+            >
+              View Orders
+            </button>
+            <button
+              onClick={() => router.push("/menu")}
+              style={{ padding: "12px 24px", borderRadius: "999px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "14px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+            >
+              Order Again →
+            </button>
+          </div>
         </div>
       </div>
     </main>
   )
 
+  // Guest — show lookup form if no orders found yet
+  if (!user) {
+    if (!guestOrders) return (
+      <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+        <Navbar />
+        <GuestOrderLookup onFound={setGuestOrders} />
+        <Footer />
+      </main>
+    )
+
+    // Guest orders found — show them
+    return (
+      <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
+        <Navbar />
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg) } }
+          @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+        `}</style>
+        <div style={{ maxWidth: "700px", margin: "0 auto", padding: "60px 1.25rem 80px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "12px" }}>
+            <h1 style={{ color: "#fff", fontSize: "26px", fontWeight: 800, letterSpacing: "-0.8px", margin: 0 }}>Your Orders</h1>
+            <button
+              onClick={() => setGuestOrders(null)}
+              style={{ color: "#555", fontSize: "13px", fontWeight: 600, background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans', sans-serif" }}
+            >
+              ← Search again
+            </button>
+          </div>
+          <p style={{ color: "#555", fontSize: "13px", marginBottom: "28px" }}>{guestOrders.length} order{guestOrders.length !== 1 ? "s" : ""} found</p>
+
+          <div style={{ backgroundColor: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.15)", borderRadius: "12px", padding: "12px 16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "16px" }}>⏱️</span>
+            <p style={{ color: "#888", fontSize: "12px", margin: 0 }}>
+              You can cancel a <strong style={{ color: "#f97316" }}>pending</strong> order within <strong style={{ color: "#f97316" }}>2 minutes</strong> of placing it.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {guestOrders.map(order => (
+              <OrderCard key={order.id} order={order} onCancel={handleCancel} cancelling={cancelling} />
+            ))}
+          </div>
+
+          <div style={{ marginTop: "32px", textAlign: "center", padding: "20px", backgroundColor: "#111", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <p style={{ color: "#555", fontSize: "13px", marginBottom: "12px" }}>Create an account to track all your orders in one place</p>
+            <Link href="/account/signup" style={{ backgroundColor: "#f97316", color: "#fff", padding: "10px 24px", borderRadius: "999px", fontSize: "13px", fontWeight: 700, textDecoration: "none" }}>
+              Create Account →
+            </Link>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    )
+  }
+
+  // Logged-in user view
   return (
     <main style={{ backgroundColor: "#0a0a0a", minHeight: "100vh", fontFamily: "'DM Sans', sans-serif" }}>
       <Navbar />
-
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
       `}</style>
 
       <div style={{ maxWidth: "700px", margin: "0 auto", padding: "60px 1.25rem 80px" }}>
-
-        {/* Breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "32px" }}>
           <Link href="/account" style={{ color: "#555", textDecoration: "none", fontSize: "13px", fontWeight: 600 }}
             onMouseEnter={e => e.currentTarget.style.color = "#f97316"}
@@ -237,7 +389,6 @@ export default function OrdersPage() {
           <span style={{ color: "#555", fontSize: "13px" }}>{orders.length} order{orders.length !== 1 ? "s" : ""}</span>
         </div>
 
-        {/* Cancel window info banner */}
         <div style={{ backgroundColor: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.15)", borderRadius: "12px", padding: "12px 16px", marginBottom: "24px", display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "16px" }}>⏱️</span>
           <p style={{ color: "#888", fontSize: "12px", margin: 0 }}>
@@ -261,66 +412,68 @@ export default function OrdersPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
             {orders.map(order => (
-              <div key={order.id} style={{
-                backgroundColor: "#111",
-                border: `1px solid ${order.status === "cancelled" ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.06)"}`,
-                borderRadius: "16px", padding: "24px",
-                opacity: order.status === "cancelled" ? 0.6 : 1,
-                transition: "all 0.2s",
-              }}>
-
-                {/* Order header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
-                  <div>
-                    <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}>
-                      Order #{order.id.slice(-6).toUpperCase()}
-                    </div>
-                    <div style={{ color: "#555", fontSize: "12px" }}>
-                      {order.createdAt?.toDate
-                        ? order.createdAt.toDate().toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
-                        : "Just now"}
-                    </div>
-                  </div>
-                  <div style={{
-                    backgroundColor: `${statusColor[order.status] ?? "#555"}18`,
-                    color: statusColor[order.status] ?? "#555",
-                    border: `1px solid ${statusColor[order.status] ?? "#555"}40`,
-                    borderRadius: "999px", padding: "4px 14px",
-                    fontSize: "12px", fontWeight: 700,
-                  }}>
-                    {statusLabel[order.status] ?? order.status}
-                  </div>
-                </div>
-
-                {/* Items */}
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "16px", marginBottom: "16px" }}>
-                  {order.items.map((item, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <span style={{ color: "#888", fontSize: "13px" }}>{item.qty}× {item.name}</span>
-                      <span style={{ color: "#666", fontSize: "13px" }}>${(item.price * item.qty).toFixed(2)}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Footer */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
-                  <div style={{ color: "#fff", fontWeight: 800, fontSize: "16px" }}>
-                    Total: <span style={{ color: "#f97316" }}>${order.total.toFixed(2)}</span>
-                  </div>
-
-                  {/* Timer + Cancel */}
-                  <CancelTimer
-                    order={order}
-                    onCancel={handleCancel}
-                    cancelling={cancelling}
-                  />
-                </div>
-              </div>
+              <OrderCard key={order.id} order={order} onCancel={handleCancel} cancelling={cancelling} />
             ))}
           </div>
         )}
       </div>
       <Footer />
     </main>
+  )
+}
+
+// ── Shared Order Card ─────────────────────────────────────────────────────────
+
+function OrderCard({ order, onCancel, cancelling }: {
+  order: Order
+  onCancel: (id: string) => void
+  cancelling: string | null
+}) {
+  return (
+    <div style={{
+      backgroundColor: "#111",
+      border: `1px solid ${order.status === "cancelled" ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.06)"}`,
+      borderRadius: "16px", padding: "24px",
+      opacity: order.status === "cancelled" ? 0.6 : 1,
+      transition: "all 0.2s",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+        <div>
+          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}>
+            Order #{order.id.slice(-6).toUpperCase()}
+          </div>
+          <div style={{ color: "#555", fontSize: "12px" }}>
+            {order.createdAt?.toDate
+              ? order.createdAt.toDate().toLocaleDateString("en-PK", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+              : "Just now"}
+          </div>
+        </div>
+        <div style={{
+          backgroundColor: `${statusColor[order.status] ?? "#555"}18`,
+          color: statusColor[order.status] ?? "#555",
+          border: `1px solid ${statusColor[order.status] ?? "#555"}40`,
+          borderRadius: "999px", padding: "4px 14px",
+          fontSize: "12px", fontWeight: 700,
+        }}>
+          {statusLabel[order.status] ?? order.status}
+        </div>
+      </div>
+
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.05)", paddingTop: "16px", marginBottom: "16px" }}>
+        {order.items.map((item, i) => (
+          <div key={i} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+            <span style={{ color: "#888", fontSize: "13px" }}>{item.qty}× {item.name}</span>
+            <span style={{ color: "#666", fontSize: "13px" }}>${(item.price * item.qty).toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: "16px" }}>
+          Total: <span style={{ color: "#f97316" }}>${order.total.toFixed(2)}</span>
+        </div>
+        <CancelTimer order={order} onCancel={onCancel} cancelling={cancelling} />
+      </div>
+    </div>
   )
 }

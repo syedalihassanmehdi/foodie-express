@@ -4,6 +4,8 @@ import { useCart } from "@/context/CartContext"
 import { useUserAuth } from "@/context/UserAuthContext"
 import { addOrder, subscribeToOffers, subscribeToAddresses, addAddress, Offer, Address } from "@/lib/firestore"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Navbar } from "@/components/layout/Navbar"
 import { CheckoutSummary } from "@/components/checkout/CheckoutSummary"
 
 export default function CheckoutPage() {
@@ -50,7 +52,6 @@ export default function CheckoutPage() {
     })
   }, [user])
 
-  // Fallback: always fill name from displayName if still empty
   useEffect(() => {
     if (user?.displayName && !name) setName(user.displayName)
   }, [user, name])
@@ -83,8 +84,6 @@ export default function CheckoutPage() {
 
   const handlePlaceOrder = async () => {
     setOrderError("")
-
-    // Use displayName as fallback if name still empty
     const finalName = name.trim() || user?.displayName || ""
     const finalPhone = phone.trim()
     const finalAddress = address.trim()
@@ -96,7 +95,6 @@ export default function CheckoutPage() {
 
     setPlacing(true)
 
-    // Save address — never block order
     if (saveAddress && user && addressMode === "new") {
       try {
         await addAddress({
@@ -113,49 +111,25 @@ export default function CheckoutPage() {
     }
 
     try {
-      const orderData = {
-        customerName: finalName,
-        customerPhone: finalPhone,
-        customerAddress: city.trim() ? `${finalAddress}, ${city.trim()}` : finalAddress,
-        notes: notes.trim(),
-        items: cart.map(i => ({
-          name: i.name,
-          qty: i.qty,
-          price: i.price,
-        })),
-        total,
-        status: "pending" as const,
-        promoCode: promoCode || undefined,
-        discount,
-        userId: user?.uid ?? "guest",
-      }
-
       await addOrder({
         customerName: finalName,
         customerPhone: finalPhone,
         customerAddress: city.trim() ? `${finalAddress}, ${city.trim()}` : finalAddress,
         notes: notes.trim(),
-        items: cart.map(i => ({
-          name: i.name,
-          qty: i.qty,
-          price: i.price,
-        })),
+        items: cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
         total,
         status: "pending" as const,
-        ...(promoCode ? { promoCode } : {}),      // ✅ only include if has value
-        ...(discount > 0 ? { discount } : {}),    // ✅ only include if has value
+        ...(promoCode ? { promoCode } : {}),
+        ...(discount > 0 ? { discount } : {}),
         userId: user?.uid ?? "guest",
       })
       clearCart()
       setPlaced(true)
     } catch (e: any) {
       console.error("Order failed:", e)
-      // Show specific error to help debug
       const msg = e?.code === "permission-denied"
         ? "Permission denied. Please make sure you are logged in and try again."
-        : e?.message
-        ? `Error: ${e.message}`
-        : "Error placing order. Try again."
+        : e?.message ? `Error: ${e.message}` : "Error placing order. Try again."
       setOrderError(msg)
       alert(msg)
     }
@@ -187,24 +161,27 @@ export default function CheckoutPage() {
   )
 
   if (placed) return (
-    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans', sans-serif", padding: "24px" }}>
-      <div style={{ textAlign: "center", maxWidth: "400px" }}>
-        <div style={{ fontSize: "64px", marginBottom: "24px" }}>🎉</div>
-        <h2 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, marginBottom: "12px" }}>Order Placed!</h2>
-        <p style={{ color: "#666", fontSize: "16px", marginBottom: "32px" }}>We're preparing your food. Estimated delivery: 30–45 min.</p>
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
-          {user ? (
-            <button onClick={() => router.push("/account/orders")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
-              Track Order →
+    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif" }}>
+      <Navbar />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 64px)", padding: "24px" }}>
+        <div style={{ textAlign: "center", maxWidth: "400px" }}>
+          <div style={{ fontSize: "64px", marginBottom: "24px" }}>🎉</div>
+          <h2 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, marginBottom: "12px" }}>Order Placed!</h2>
+          <p style={{ color: "#666", fontSize: "16px", marginBottom: "32px" }}>We're preparing your food. Estimated delivery: 30–45 min.</p>
+          <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+            {user ? (
+              <button onClick={() => router.push("/account/orders")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
+                Track Order →
+              </button>
+            ) : (
+              <button onClick={() => router.push("/account/orders")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
+                Track Order →
+              </button>
+            )}
+            <button onClick={() => router.push("/menu")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#1a1a1a", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
+              Back to Menu
             </button>
-          ) : (
-            <button onClick={() => router.push("/account/signup")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#f97316", color: "#fff", border: "none", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
-              Create Account →
-            </button>
-          )}
-          <button onClick={() => router.push("/menu")} style={{ padding: "14px 28px", borderRadius: "14px", backgroundColor: "#1a1a1a", color: "#fff", border: "1px solid rgba(255,255,255,0.1)", fontWeight: 700, fontSize: "15px", cursor: "pointer" }}>
-            Back to Menu
-          </button>
+          </div>
         </div>
       </div>
     </main>
@@ -212,13 +189,16 @@ export default function CheckoutPage() {
 
   if (user && !addressesLoaded) return (
     <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Navbar />
       <div style={{ width: "32px", height: "32px", border: "3px solid rgba(249,115,22,0.2)", borderTopColor: "#f97316", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </main>
   )
 
   return (
-    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif", padding: "32px 16px 64px" }}>
+    <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif" }}>
+      <Navbar />
+
       <style>{`
         * { box-sizing: border-box; }
         .co-wrap { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
@@ -232,23 +212,34 @@ export default function CheckoutPage() {
         @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
 
-      <div style={{ maxWidth: "1000px", margin: "0 auto 32px" }}>
+      {/* Breadcrumb */}
+      <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "20px 16px 0", fontSize: "13px", color: "#555", display: "flex", gap: "6px", alignItems: "center" }}>
+        <Link href="/" style={{ color: "#f97316", textDecoration: "none", fontWeight: 600 }}>Home</Link>
+        <span>›</span>
+        <Link href="/cart" style={{ color: "#555", textDecoration: "none" }}>Cart</Link>
+        <span>›</span>
+        <span style={{ color: "#888", fontWeight: 600 }}>Checkout</span>
+      </div>
+
+      <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "16px 16px 28px" }}>
         <h1 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, margin: "0 0 4px" }}>Checkout</h1>
         <p style={{ color: "#555", fontSize: "14px", margin: 0 }}>{cart.length} item{cart.length !== 1 ? "s" : ""} in your cart</p>
       </div>
 
       {!user && (
-        <div style={{ maxWidth: "1000px", margin: "0 auto 20px", backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
-          <p style={{ color: "#555", fontSize: "13px", margin: 0 }}>
-            💡 Have an account?{" "}
-            <a href="/account/login" style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>Sign in</a>
-            {" "}to use saved addresses — or just order below.
-          </p>
-          <a href="/account/signup" style={{ fontSize: "12px", color: "#444", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>Create account →</a>
+        <div style={{ maxWidth: "1000px", margin: "0 auto 20px", padding: "0 16px" }}>
+          <div style={{ backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+            <p style={{ color: "#555", fontSize: "13px", margin: 0 }}>
+              💡 Have an account?{" "}
+              <a href="/account/login" style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>Sign in</a>
+              {" "}to use saved addresses — or just order below.
+            </p>
+            <a href="/account/signup" style={{ fontSize: "12px", color: "#444", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>Create account →</a>
+          </div>
         </div>
       )}
 
-      <div className="co-wrap">
+      <div className="co-wrap" style={{ padding: "0 16px 64px" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
 
           {/* ── LOGGED IN WITH SAVED ADDRESSES ── */}
@@ -289,21 +280,18 @@ export default function CheckoutPage() {
                       )
                     })}
                   </div>
-
                   <div className="two-col">
                     <div>
                       <label style={labelStyle}>Full Name *</label>
                       <input value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                      />
+                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                     </div>
                     <div>
                       <label style={labelStyle}>Phone *</label>
                       <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                      />
+                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                     </div>
                   </div>
                 </>
@@ -316,15 +304,13 @@ export default function CheckoutPage() {
                       <label style={labelStyle}>Full Name *</label>
                       <input value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                      />
+                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                     </div>
                     <div>
                       <label style={labelStyle}>Phone *</label>
                       <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                      />
+                        onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                     </div>
                   </div>
                   <div>
@@ -332,15 +318,13 @@ export default function CheckoutPage() {
                     <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="House 12, Street 5, Block A" rows={2}
                       style={{ ...inputStyle, resize: "vertical" }}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                    />
+                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                   </div>
                   <div>
                     <label style={labelStyle}>City</label>
                     <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Chakwal" style={inputStyle}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                    />
+                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                   </div>
                   <SaveCheckbox />
                 </div>
@@ -358,15 +342,13 @@ export default function CheckoutPage() {
                     <label style={labelStyle}>Full Name *</label>
                     <input value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={inputStyle}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                    />
+                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                   </div>
                   <div>
                     <label style={labelStyle}>Phone *</label>
                     <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                    />
+                      onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                   </div>
                 </div>
                 <div>
@@ -374,23 +356,20 @@ export default function CheckoutPage() {
                   <textarea value={address} onChange={e => setAddress(e.target.value)} placeholder="House 12, Street 5, Block A" rows={2}
                     style={{ ...inputStyle, resize: "vertical" }}
                     onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                  />
+                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                 </div>
                 <div>
                   <label style={labelStyle}>City</label>
                   <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Chakwal" style={inputStyle}
                     onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                  />
+                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                 </div>
                 <div>
                   <label style={labelStyle}>Order Notes</label>
                   <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Allergies, special requests..." rows={2}
                     style={{ ...inputStyle, resize: "vertical" }}
                     onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-                  />
+                    onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
                 </div>
                 {user && <SaveCheckbox />}
                 {!user && (
@@ -414,8 +393,7 @@ export default function CheckoutPage() {
               <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Allergies, special requests..." rows={2}
                 style={{ ...inputStyle, resize: "vertical" }}
                 onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
-                onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
-              />
+                onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"} />
             </div>
           )}
 
