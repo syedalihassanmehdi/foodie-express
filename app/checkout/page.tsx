@@ -4,7 +4,6 @@ import { useCart } from "@/context/CartContext"
 import { useUserAuth } from "@/context/UserAuthContext"
 import { addOrder, subscribeToOffers, subscribeToAddresses, addAddress, Offer, Address } from "@/lib/firestore"
 import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/layout/Navbar"
 import { CheckoutSummary } from "@/components/checkout/CheckoutSummary"
 
 export default function CheckoutPage() {
@@ -30,6 +29,7 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null)
   const [addressMode, setAddressMode] = useState<"saved" | "new">("new")
   const [addressesLoaded, setAddressesLoaded] = useState(false)
+  const [orderError, setOrderError] = useState("")
 
   useEffect(() => { return subscribeToOffers(setOffers) }, [])
 
@@ -44,22 +44,21 @@ export default function CheckoutPage() {
         setSelectedAddressId(def.id)
         setAddress(def.address)
         setCity(def.city ?? "")
-        
-        setName(def.name ?? user?.displayName ?? "")
+        setName(def.name ?? "")
         if (def.phone) setPhone(def.phone)
       }
     })
   }, [user])
 
+  // Fallback: always fill name from displayName if still empty
   useEffect(() => {
     if (user?.displayName && !name) setName(user.displayName)
-  }, [user])
+  }, [user, name])
 
   const selectSavedAddress = (addr: Address) => {
     setSelectedAddressId(addr.id)
     setAddress(addr.address)
     setCity(addr.city ?? "")
-    
     setName(addr.name ?? user?.displayName ?? "")
     if (addr.phone) setPhone(addr.phone)
   }
@@ -83,45 +82,69 @@ export default function CheckoutPage() {
   const total = Math.max(0, cartTotal - discount + deliveryFee + tax - bundleDiscount)
 
   const handlePlaceOrder = async () => {
-    if (!name.trim()) return alert("Please enter your full name")
-    if (!phone.trim()) return alert("Please enter your phone number")
-    if (!address.trim()) return alert("Please enter a delivery address")
+    setOrderError("")
+
+    // Use displayName as fallback if name still empty
+    const finalName = name.trim() || user?.displayName || ""
+    const finalPhone = phone.trim()
+    const finalAddress = address.trim()
+
+    if (!finalName) return alert("Please enter your full name")
+    if (!finalPhone) return alert("Please enter your phone number")
+    if (!finalAddress) return alert("Please enter a delivery address")
     if (cart.length === 0) return alert("Your cart is empty")
+
     setPlacing(true)
-    try {
-      if (saveAddress && user) {
-        try {
-          await addAddress({
-            userId: user.uid,
-            label: "Home" as const,
-            address: address.trim(),
-            city: city.trim(),
-            notes: notes.trim(),
-            isDefault: savedAddresses.length === 0,
-          })
-        } catch (e) {
-          console.warn("Could not save address:", e)
-        }
+
+    // Save address — never block order
+    if (saveAddress && user && addressMode === "new") {
+      try {
+        await addAddress({
+          userId: user.uid,
+          label: "Home" as const,
+          address: finalAddress,
+          city: city.trim(),
+          notes: notes.trim(),
+          isDefault: savedAddresses.length === 0,
+        })
+      } catch (e) {
+        console.warn("Address save failed:", e)
       }
-  
-      await addOrder({
-        customerName: name.trim() || user?.displayName || "Guest",
-        customerPhone: phone.trim(),
-        customerAddress: city.trim() ? `${address.trim()}, ${city.trim()}` : address.trim(),
+    }
+
+    try {
+      const orderData = {
+        customerName: finalName,
+        customerPhone: finalPhone,
+        customerAddress: city.trim() ? `${finalAddress}, ${city.trim()}` : finalAddress,
         notes: notes.trim(),
-        items: cart.map(i => ({ name: i.name, qty: i.qty, price: i.price })),
+        items: cart.map(i => ({
+          name: i.name,
+          qty: i.qty,
+          price: i.price,
+        })),
         total,
-        status: "pending",
+        status: "pending" as const,
         promoCode: promoCode || undefined,
         discount,
         userId: user?.uid ?? "guest",
-      })
+      }
+
+      await addOrder(orderData)
       clearCart()
       setPlaced(true)
-    } catch (e) {
+    } catch (e: any) {
       console.error("Order failed:", e)
-      alert("Error placing order. Try again.")
+      // Show specific error to help debug
+      const msg = e?.code === "permission-denied"
+        ? "Permission denied. Please make sure you are logged in and try again."
+        : e?.message
+        ? `Error: ${e.message}`
+        : "Error placing order. Try again."
+      setOrderError(msg)
+      alert(msg)
     }
+
     setPlacing(false)
   }
 
@@ -132,14 +155,14 @@ export default function CheckoutPage() {
     fontFamily: "'DM Sans', sans-serif", boxSizing: "border-box",
     transition: "border-color 0.2s",
   }
+
   const labelStyle: React.CSSProperties = {
     display: "block", fontSize: "11px", fontWeight: 700,
     color: "#555", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px",
   }
 
   const SaveCheckbox = () => (
-    <div
-      onClick={() => setSaveAddress(p => !p)}
+    <div onClick={() => setSaveAddress(p => !p)}
       style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", padding: "12px 14px", borderRadius: "10px", backgroundColor: saveAddress ? "rgba(249,115,22,0.06)" : "rgba(255,255,255,0.02)", border: `1px solid ${saveAddress ? "rgba(249,115,22,0.2)" : "rgba(255,255,255,0.06)"}`, transition: "all 0.2s", userSelect: "none" as const }}>
       <div style={{ width: "18px", height: "18px", borderRadius: "5px", border: `2px solid ${saveAddress ? "#f97316" : "rgba(255,255,255,0.2)"}`, backgroundColor: saveAddress ? "#f97316" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}>
         {saveAddress && <span style={{ color: "#fff", fontSize: "11px", fontWeight: 800 }}>✓</span>}
@@ -172,7 +195,6 @@ export default function CheckoutPage() {
     </main>
   )
 
-  // Show spinner while loading addresses for logged in users
   if (user && !addressesLoaded) return (
     <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ width: "32px", height: "32px", border: "3px solid rgba(249,115,22,0.2)", borderTopColor: "#f97316", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
@@ -182,7 +204,6 @@ export default function CheckoutPage() {
 
   return (
     <main style={{ minHeight: "100vh", backgroundColor: "#0a0a0a", fontFamily: "'DM Sans', sans-serif", padding: "32px 16px 64px" }}>
-      
       <style>{`
         * { box-sizing: border-box; }
         .co-wrap { max-width: 1000px; margin: 0 auto; display: grid; grid-template-columns: 1fr 380px; gap: 24px; align-items: start; }
@@ -195,13 +216,12 @@ export default function CheckoutPage() {
         @media (max-width: 340px) { .addr-grid { grid-template-columns: 1fr; } }
         @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
-          
+
       <div style={{ maxWidth: "1000px", margin: "0 auto 32px" }}>
         <h1 style={{ color: "#fff", fontSize: "28px", fontWeight: 800, margin: "0 0 4px" }}>Checkout</h1>
         <p style={{ color: "#555", fontSize: "14px", margin: 0 }}>{cart.length} item{cart.length !== 1 ? "s" : ""} in your cart</p>
       </div>
 
-      {/* Soft guest banner */}
       {!user && (
         <div style={{ maxWidth: "1000px", margin: "0 auto 20px", backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: "12px", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
           <p style={{ color: "#555", fontSize: "13px", margin: 0 }}>
@@ -209,9 +229,7 @@ export default function CheckoutPage() {
             <a href="/account/login" style={{ color: "#f97316", fontWeight: 700, textDecoration: "none" }}>Sign in</a>
             {" "}to use saved addresses — or just order below.
           </p>
-          <a href="/account/signup" style={{ fontSize: "12px", color: "#444", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
-            Create account →
-          </a>
+          <a href="/account/signup" style={{ fontSize: "12px", color: "#444", textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>Create account →</a>
         </div>
       )}
 
@@ -224,18 +242,17 @@ export default function CheckoutPage() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", flexWrap: "wrap", gap: "8px" }}>
                 <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: 0 }}>📍 Saved Addresses</h3>
                 <div style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => { setAddressMode("saved"); const def = savedAddresses.find(a => a.isDefault) ?? savedAddresses[0]; selectSavedAddress(def); setSelectedAddressId(def.id) }}
+                  <button onClick={() => { setAddressMode("saved"); const def = savedAddresses.find(a => a.isDefault) ?? savedAddresses[0]; selectSavedAddress(def) }}
                     style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer", backgroundColor: addressMode === "saved" ? "#f97316" : "rgba(255,255,255,0.07)", color: addressMode === "saved" ? "#fff" : "#888" }}>
                     Saved
                   </button>
-                  <button onClick={() => { setAddressMode("new"); setSelectedAddressId(null); setAddress(""); setCity("") }}
+                  <button onClick={() => { setAddressMode("new"); setSelectedAddressId(null); setAddress(""); setCity(""); setName(user?.displayName ?? ""); setPhone("") }}
                     style={{ padding: "5px 14px", borderRadius: "20px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer", backgroundColor: addressMode === "new" ? "#f97316" : "rgba(255,255,255,0.07)", color: addressMode === "new" ? "#fff" : "#888" }}>
                     + New
                   </button>
                 </div>
               </div>
 
-              {/* Saved address cards */}
               {addressMode === "saved" && (
                 <>
                   <div className="addr-grid">
@@ -258,7 +275,6 @@ export default function CheckoutPage() {
                     })}
                   </div>
 
-                  {/* Name + Phone always visible */}
                   <div className="two-col">
                     <div>
                       <label style={labelStyle}>Full Name *</label>
@@ -269,7 +285,7 @@ export default function CheckoutPage() {
                     </div>
                     <div>
                       <label style={labelStyle}>Phone *</label>
-                      <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 234 567 8900" style={inputStyle}
+                      <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
                         onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                       />
@@ -278,7 +294,6 @@ export default function CheckoutPage() {
                 </>
               )}
 
-              {/* New address form */}
               {addressMode === "new" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <div className="two-col">
@@ -291,7 +306,7 @@ export default function CheckoutPage() {
                     </div>
                     <div>
                       <label style={labelStyle}>Phone *</label>
-                      <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 234 567 8900" style={inputStyle}
+                      <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                         onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
                         onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                       />
@@ -307,7 +322,7 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <label style={labelStyle}>City</label>
-                    <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Lahore" style={inputStyle}
+                    <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Chakwal" style={inputStyle}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
                       onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                     />
@@ -333,7 +348,7 @@ export default function CheckoutPage() {
                   </div>
                   <div>
                     <label style={labelStyle}>Phone *</label>
-                    <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 234 567 8900" style={inputStyle}
+                    <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+92 300 0000000" style={inputStyle}
                       onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
                       onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                     />
@@ -349,7 +364,7 @@ export default function CheckoutPage() {
                 </div>
                 <div>
                   <label style={labelStyle}>City</label>
-                  <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Lahore" style={inputStyle}
+                  <input value={city} onChange={e => setCity(e.target.value)} placeholder="e.g. Chakwal" style={inputStyle}
                     onFocus={e => e.currentTarget.style.borderColor = "rgba(249,115,22,0.5)"}
                     onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                   />
@@ -362,11 +377,7 @@ export default function CheckoutPage() {
                     onBlur={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"}
                   />
                 </div>
-
-                {/* Save checkbox — logged in users only */}
                 {user && <SaveCheckbox />}
-
-                {/* Guest nudge — soft, not a blocker */}
                 {!user && (
                   <div style={{ padding: "12px 14px", borderRadius: "10px", backgroundColor: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "16px" }}>💾</span>
@@ -381,7 +392,7 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {/* Order notes — saved address mode */}
+          {/* Order notes — saved mode */}
           {user && savedAddresses.length > 0 && addressMode === "saved" && (
             <div className="co-card">
               <h3 style={{ color: "#fff", fontSize: "15px", fontWeight: 700, margin: "0 0 14px" }}>📝 Order Notes</h3>
@@ -421,7 +432,6 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        {/* RIGHT: Order Summary */}
         <CheckoutSummary
           items={cart.map(i => ({ id: i.id, name: i.name, image: i.image, price: i.price, qty: i.qty }))}
           discount={discount}
