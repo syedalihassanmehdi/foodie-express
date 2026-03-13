@@ -1,236 +1,211 @@
 "use client"
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { subscribeToOffers, Offer } from "@/lib/firestore"
 
-export function OrderSummary({ subtotal, bundleDiscount = 0 }: { subtotal: number; bundleDiscount?: number }) {
-  const [promo, setPromo] = useState("")
-  const [promoCode, setPromoCode] = useState("")
-  const [promoDiscount, setPromoDiscount] = useState(0)
-  const [appliedOffer, setAppliedOffer] = useState<Offer | null>(null)
-  const [promoError, setPromoError] = useState("")
-  const [offers, setOffers] = useState<Offer[]>([])
+export type SummaryItem = {
+  id: string
+  name: string
+  image: string
+  price: number
+  qty: number
+}
 
-  useEffect(() => { return subscribeToOffers(setOffers) }, [])
+// ── Icons ────────────────────────────────────────────────────
+const LockIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+)
+const CheckIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6L9 17l-5-5"/>
+  </svg>
+)
+const ArrowIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14M12 5l7 7-7 7"/>
+  </svg>
+)
+const TagIcon = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+    <line x1="7" y1="7" x2="7.01" y2="7"/>
+  </svg>
+)
 
-  const delivery = appliedOffer?.type === "free_delivery" ? 0 : subtotal > 0 ? 2.50 : 0
-  const tax = subtotal * 0.08
-  const total = Math.max(0, subtotal + delivery + tax - promoDiscount - bundleDiscount)
+export function OrderSummary({
+  items = [],
+  onPlaceOrder,
+  loading = false,
+  discount = 0,
+  appliedOffer = null,
+  deliveryFee = 2.99,
+  tax = 0,
+  total,
+}: {
+  items?: SummaryItem[]
+  onPlaceOrder: () => void
+  loading?: boolean
+  discount?: number
+  appliedOffer?: { type: string; value: number; code: string } | null
+  deliveryFee?: number
+  tax?: number
+  total?: number
+}) {
+  const subtotal    = items.reduce((s, i) => s + i.price * i.qty, 0)
+  const displayTotal = total ?? Math.max(0, subtotal + deliveryFee + tax - discount)
 
-  const handlePromo = () => {
-    setPromoError("")
-    const code = promo.trim().toUpperCase()
-    const offer = offers.find(o => o.code.toUpperCase() === code && o.active)
-    if (!offer) { setPromoError("Invalid or inactive promo code."); return }
-    if (offer.expiresAt && new Date(offer.expiresAt) < new Date()) { setPromoError("This code has expired."); return }
-
-    setPromoCode(code)
-    setAppliedOffer(offer)
-    if (offer.type === "percent") setPromoDiscount(Math.round(subtotal * offer.value / 100))
-    else if (offer.type === "flat") setPromoDiscount(offer.value)
-    else if (offer.type === "free_delivery") setPromoDiscount(0)
-    else if (offer.type === "bogo") setPromoDiscount(Math.round(subtotal * 0.5))
+  const formatDiscount = () => {
+    if (!appliedOffer) return ""
+    if (appliedOffer.type === "percent")       return `${appliedOffer.value}% off`
+    if (appliedOffer.type === "flat")          return `$${appliedOffer.value} off`
+    if (appliedOffer.type === "free_delivery") return "Free delivery"
+    return "Discount"
   }
 
-  const removePromo = () => {
-    setPromo("")
-    setPromoCode("")
-    setPromoDiscount(0)
-    setAppliedOffer(null)
-    setPromoError("")
-  }
+  const isFreeDelivery = appliedOffer?.type === "free_delivery"
+  const isEmpty        = items.length === 0
 
-  const activeOffers = offers.filter(o => o.active && (!o.expiresAt || new Date(o.expiresAt) >= new Date()))
+  const rows = [
+    { label: "Subtotal",      value: `$${subtotal.toFixed(2)}`,                          accent: false },
+    { label: "Delivery Fee",  value: isFreeDelivery ? "Free" : `$${deliveryFee.toFixed(2)}`, accent: isFreeDelivery },
+    { label: "Tax (8%)",      value: `$${tax.toFixed(2)}`,                               accent: false },
+    ...(discount > 0 && !isFreeDelivery
+      ? [{ label: `Promo (${formatDiscount()})`, value: `-$${discount.toFixed(2)}`, accent: true }]
+      : []),
+  ]
 
   return (
-    <div style={{
-      position: "sticky", top: "84px",
-      display: "flex", flexDirection: "column", gap: "16px",
-      fontFamily: "'DM Sans', sans-serif",
-    }}>
-
+    <div style={{ position: "sticky", top: "84px", fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
-        .summary-input {
-          flex: 1;
-          padding: 10px 14px;
-          border-radius: 10px;
-          border: 1px solid rgba(255,255,255,0.08);
-          font-size: 13px;
-          outline: none;
-          font-family: 'DM Sans', sans-serif;
-          background-color: #0a0a0a;
-          color: #fff;
-          transition: border-color 0.2s;
-          box-sizing: border-box;
-        }
-        .summary-input:focus {
-          border-color: rgba(249,115,22,0.5);
-        }
-        .summary-input:disabled {
-          opacity: 0.5;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
+        .os-btn { transition: all 0.15s ease !important; }
+        .os-btn:hover:not(:disabled) { transform: translateY(-2px) !important; box-shadow: 6px 6px 0px #111 !important; }
       `}</style>
 
       <div style={{
-        backgroundColor: "#111",
-        borderRadius: "20px", padding: "24px",
-        border: "1px solid rgba(255,255,255,0.06)",
-        boxSizing: "border-box", width: "100%",
+        backgroundColor: "#fff",
+        borderRadius: "20px",
+        border: "2px solid #111",
+        boxShadow: "6px 6px 0px #111",
+        overflow: "hidden",
       }}>
 
-        <h2 style={{ fontWeight: 800, fontSize: "18px", color: "#fff", marginBottom: "20px", letterSpacing: "-0.3px" }}>
-          Order Summary
-        </h2>
-
-        {/* Rows */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "16px" }}>
-          {[
-            ["Subtotal", `$${subtotal.toFixed(2)}`, false],
-            ["Tax (8%)", `$${tax.toFixed(2)}`, false],
-            ["Delivery Fee", delivery === 0 && subtotal > 0 ? "Free 🎉" : `$${delivery.toFixed(2)}`, false],
-            ...(bundleDiscount > 0 ? [["🧩 Bundle Discount", `-$${bundleDiscount.toFixed(2)}`, true]] : []),
-            ...(promoDiscount > 0 ? [[`🏷️ Promo (${promoCode})`, `-$${promoDiscount.toFixed(2)}`, true]] : []),
-            ...(appliedOffer?.type === "free_delivery" ? [["🚚 Free Delivery", "Applied!", true]] : []),
-          ].map(([label, value, isGreen]) => (
-            <div key={label as string} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: isGreen ? "#22c55e" : "#555", fontSize: "14px", fontWeight: isGreen ? 600 : 400 }}>
-                {label as string}
-              </span>
-              <span style={{ fontWeight: 600, fontSize: "14px", color: isGreen ? "#22c55e" : "#fff" }}>
-                {value as string}
-              </span>
-            </div>
-          ))}
+        {/* Orange header bar */}
+        <div style={{ backgroundColor: "#f97316", padding: "16px 20px", borderBottom: "2px solid #111" }}>
+          <h2 style={{ fontWeight: 800, fontSize: "17px", color: "#fff", margin: 0, letterSpacing: "-0.5px", fontFamily: "'Syne', sans-serif" }}>
+            Order Summary
+          </h2>
+          <p style={{ color: "rgba(255,255,255,0.75)", fontSize: "12px", margin: "3px 0 0" }}>
+            {isEmpty ? "No items yet" : `${items.reduce((s, i) => s + i.qty, 0)} item${items.reduce((s,i)=>s+i.qty,0) !== 1 ? "s" : ""} in cart`}
+          </p>
         </div>
 
-        {/* Savings callouts */}
-        {(bundleDiscount > 0 || promoDiscount > 0) && (
+        <div style={{ padding: "20px" }}>
+
+          {/* Items list */}
+          {!isEmpty && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
+              {items.map(item => (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <img
+                    src={item.image} alt={item.name}
+                    style={{ width: "46px", height: "46px", borderRadius: "10px", objectFit: "cover", flexShrink: 0, border: "2px solid #111", boxShadow: "2px 2px 0px #f97316" }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontWeight: 700, fontSize: "12px", color: "#111", margin: "0 0 1px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'Syne', sans-serif" }}>{item.name}</p>
+                    <p style={{ color: "#bbb", fontSize: "11px", margin: 0 }}>Qty: {item.qty}</p>
+                  </div>
+                  <span style={{ fontWeight: 800, fontSize: "13px", color: "#f97316", flexShrink: 0, fontFamily: "'Syne', sans-serif" }}>
+                    ${(item.price * item.qty).toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Divider */}
+          <div style={{ height: "2px", backgroundColor: "#f5f5f5", marginBottom: "16px", borderRadius: "2px" }} />
+
+          {/* Price rows */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "14px" }}>
+            {rows.map(({ label, value, accent }) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ color: accent ? "#22c55e" : "#888", fontSize: "13px", fontWeight: accent ? 700 : 400, display: "flex", alignItems: "center", gap: "5px" }}>
+                  {accent && <span style={{ color: "#22c55e" }}><CheckIcon /></span>}
+                  {label}
+                </span>
+                <span style={{ fontWeight: 700, fontSize: "13px", color: accent ? "#22c55e" : "#111" }}>{value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Applied offer badge */}
+          {appliedOffer && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: "7px",
+              backgroundColor: "#f0fdf4", border: "2px solid #22c55e",
+              borderRadius: "10px", padding: "8px 12px", marginBottom: "14px",
+              boxShadow: "2px 2px 0px #22c55e",
+            }}>
+              <span style={{ color: "#22c55e" }}><TagIcon /></span>
+              <span style={{ fontSize: "12px", color: "#22c55e", fontWeight: 800, fontFamily: "monospace", letterSpacing: "1px" }}>{appliedOffer.code}</span>
+              <span style={{ fontSize: "12px", color: "#22c55e", fontWeight: 600 }}>applied!</span>
+            </div>
+          )}
+
+          {/* Total row */}
           <div style={{
-            backgroundColor: "rgba(34,197,94,0.08)",
-            border: "1px solid rgba(34,197,94,0.2)",
-            borderRadius: "10px", padding: "10px 14px",
-            marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "14px 16px",
+            backgroundColor: "#f97316",
+            borderRadius: "12px", border: "2px solid #111",
+            boxShadow: "3px 3px 0px #111",
+            marginBottom: "16px",
           }}>
-            <span style={{ fontSize: "16px" }}>🎉</span>
-            <span style={{ fontSize: "12px", color: "#22c55e", fontWeight: 600 }}>
-              You're saving ${(bundleDiscount + promoDiscount).toFixed(2)} on this order!
+            <span style={{ fontWeight: 800, fontSize: "15px", color: "#fff", fontFamily: "'Syne', sans-serif" }}>Total</span>
+            <span style={{ fontWeight: 800, fontSize: "22px", color: "#fff", letterSpacing: "-0.5px", fontFamily: "'Syne', sans-serif" }}>
+              ${displayTotal.toFixed(2)}
             </span>
           </div>
-        )}
 
-        {/* Total */}
-        <div style={{
-          borderTop: "1px solid rgba(255,255,255,0.06)",
-          paddingTop: "16px", marginBottom: "20px",
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-        }}>
-          <span style={{ fontWeight: 700, fontSize: "16px", color: "#fff" }}>Total</span>
-          <span style={{ fontWeight: 800, fontSize: "22px", color: "#f97316", letterSpacing: "-0.5px" }}>
-            ${total.toFixed(2)}
-          </span>
-        </div>
+          {/* Place Order Button */}
+          <button
+            onClick={onPlaceOrder}
+            disabled={loading || isEmpty}
+            className="os-btn"
+            style={{
+              width: "100%",
+              padding: "14px 20px",
+              backgroundColor: loading ? "#fddcbb" : isEmpty ? "#f5f5f5" : "#111",
+              color: isEmpty ? "#bbb" : "#fff",
+              border: `2px solid ${isEmpty ? "#e8e8e8" : "#111"}`,
+              borderRadius: "12px",
+              fontWeight: 800,
+              fontSize: "15px",
+              cursor: (loading || isEmpty) ? "not-allowed" : "pointer",
+              fontFamily: "'Syne', sans-serif",
+              boxShadow: (loading || isEmpty) ? "none" : "4px 4px 0px #f97316",
+              marginBottom: "12px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+            }}
+          >
+            {loading
+              ? "Placing Order..."
+              : isEmpty
+              ? "Cart is Empty"
+              : <><span>Place Order</span><ArrowIcon /></>}
+          </button>
 
-        {/* Promo Code */}
-        <div style={{ marginBottom: "20px" }}>
-          <label style={{
-            display: "block", fontSize: "11px", fontWeight: 700,
-            color: "#555", letterSpacing: "1px",
-            textTransform: "uppercase", marginBottom: "8px",
-          }}>
-            Promo Code
-          </label>
-
-          {appliedOffer ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: "10px", backgroundColor: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ color: "#22c55e", fontSize: "14px" }}>✓</span>
-                <div>
-                  <span style={{ color: "#22c55e", fontSize: "13px", fontWeight: 700 }}>{appliedOffer.code}</span>
-                  <span style={{ color: "#555", fontSize: "12px", marginLeft: "6px" }}>{appliedOffer.title}</span>
-                </div>
-              </div>
-              <button onClick={removePromo} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: "12px", fontFamily: "'DM Sans', sans-serif", padding: "2px 6px" }}>
-                ✕
-              </button>
-            </div>
-          ) : (
-            <>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <input
-                  type="text"
-                  placeholder="Enter code"
-                  value={promo}
-                  onChange={e => { setPromo(e.target.value.toUpperCase()); setPromoError("") }}
-                  className="summary-input"
-                  onKeyDown={e => e.key === "Enter" && handlePromo()}
-                />
-                <button
-                  onClick={handlePromo}
-                  style={{
-                    padding: "10px 16px",
-                    backgroundColor: "#f97316",
-                    color: "#fff", border: "none", borderRadius: "10px",
-                    fontWeight: 700, fontSize: "13px",
-                    cursor: "pointer",
-                    fontFamily: "'DM Sans', sans-serif",
-                    transition: "background 0.2s", whiteSpace: "nowrap",
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.backgroundColor = "#ea6c0a"}
-                  onMouseLeave={e => e.currentTarget.style.backgroundColor = "#f97316"}
-                >
-                  Apply
-                </button>
-              </div>
-              {promoError && (
-                <p style={{ color: "#ef4444", fontSize: "12px", margin: "6px 0 0" }}>{promoError}</p>
-              )}
-              {/* Quick-apply offer chips */}
-              {activeOffers.length > 0 && (
-                <div style={{ marginTop: "8px", display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                  {activeOffers.map(o => (
-                    <button key={o.id} onClick={() => { setPromo(o.code); setPromoError("") }}
-                      style={{ padding: "3px 10px", borderRadius: "20px", fontSize: "11px", fontWeight: 700, border: "1px solid rgba(249,115,22,0.3)", backgroundColor: "rgba(249,115,22,0.06)", color: "#f97316", cursor: "pointer", letterSpacing: "0.5px", fontFamily: "'DM Sans', sans-serif" }}>
-                      {o.code}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Checkout Button */}
-        <Link
-          href="/checkout"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            gap: "8px", width: "100%", padding: "15px",
-            backgroundColor: "#f97316", color: "#fff",
-            borderRadius: "999px", fontWeight: 700, fontSize: "15px",
-            textDecoration: "none", transition: "all 0.2s",
-            boxSizing: "border-box",
-            boxShadow: "0 0 30px rgba(249,115,22,0.25)",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = "#ea6c0a"; e.currentTarget.style.boxShadow = "0 0 40px rgba(249,115,22,0.4)" }}
-          onMouseLeave={e => { e.currentTarget.style.backgroundColor = "#f97316"; e.currentTarget.style.boxShadow = "0 0 30px rgba(249,115,22,0.25)" }}
-        >
-          Proceed to Checkout →
-        </Link>
-
-        {/* Trust badges */}
-        <div style={{ marginTop: "16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-          {[
-            ["✅", "Secure checkout guaranteed"],
-            ["⏱️", "Estimated delivery: 25–35 mins"],
-          ].map(([icon, text]) => (
-            <div key={text} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "13px" }}>{icon}</span>
-              <span style={{ color: "#444", fontSize: "12px" }}>{text}</span>
-            </div>
-          ))}
+          {/* Trust line */}
+          <p style={{ textAlign: "center", color: "#bbb", fontSize: "12px", margin: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: "5px" }}>
+            <LockIcon /> Secure encrypted checkout
+          </p>
         </div>
       </div>
     </div>
   )
 }
+
+export { OrderSummary as CheckoutSummary }
