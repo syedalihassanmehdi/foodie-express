@@ -100,14 +100,8 @@ export function Footer() {
 
           {/* Brand */}
           <div>
-            <Link href="/" style={{ display: "flex", alignItems: "center", gap: "9px", textDecoration: "none", marginBottom: "16px" }}>
-              <div style={{ width: "36px", height: "36px", borderRadius: "10px", backgroundColor: "#f97316", border: "2px solid #111", boxShadow: "2px 2px 0px #111", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <ForkIcon />
-              </div>
-              <div>
-                <span style={{ color: "#111", fontWeight: 800, fontSize: "16px", letterSpacing: "-0.5px", fontFamily: "'Syne', sans-serif" }}>Foodie</span>
-                <span style={{ color: "#f97316", fontWeight: 800, fontSize: "16px", letterSpacing: "-0.5px", fontFamily: "'Syne', sans-serif" }}>Express</span>
-              </div>
+            <Link href="/" style={{ display: "inline-flex", textDecoration: "none", marginBottom: "16px" }}>
+              <img src="/logo6.png" alt="FoodieExpress" style={{ height: "44px", width: "auto", display: "block" }} />
             </Link>
             <p style={{ fontSize: "13px", lineHeight: 1.8, color: "#888", maxWidth: "220px", marginBottom: "20px" }}>
               Redefining delivery with gourmet standards and local passion. Freshness to your door.
