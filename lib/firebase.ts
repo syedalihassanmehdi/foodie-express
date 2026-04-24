@@ -12,7 +12,10 @@ const firebaseConfig = {
 }
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+const adminApp = getApps().find(a => a.name === "adminApp") || initializeApp(firebaseConfig, "adminApp")
 
 export const db = getFirestore(app)
 export const auth = getAuth(app)
+export const adminAuth = getAuth(adminApp)
+
 export default app

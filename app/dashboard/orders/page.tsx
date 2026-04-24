@@ -148,6 +148,7 @@ export default function DashboardOrdersPage() {
   const [filter, setFilter]   = useState<"all" | OrderStatus>("all")
   const [selected, setSelected] = useState<Order | null>(null)
   const [tick, setTick]       = useState(0)
+  const [isExporting, setIsExporting] = useState(false)
   const prevIds               = useRef<Set<string>>(new Set())
   const audioCtx              = useRef<AudioContext | null>(null)
 
@@ -176,6 +177,53 @@ export default function DashboardOrdersPage() {
   const filtered        = filter === "all" ? orders : orders.filter(o => o.status === filter)
   const newOrdersCount  = orders.filter(o => isNew(o.createdAt) && o.status === "pending").length
 
+  const handleExportAndCleanup = async () => {
+    if (filtered.length === 0) return alert("No orders to export in the current view.")
+    let webhookUrl = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_WEBHOOK || localStorage.getItem("sheetWebhookUrl")
+    if (!webhookUrl) {
+      webhookUrl = prompt("Enter your Google Apps Script Webhook URL (you only need to do this once):")
+      if (!webhookUrl) return
+      localStorage.setItem("sheetWebhookUrl", webhookUrl)
+    }
+
+    const confirmMsg = `Are you sure you want to export and permanently DELETE ${filtered.length} order(s) from Firebase?`
+    if (!confirm(confirmMsg)) return
+
+    setIsExporting(true)
+    try {
+      const payload = filtered.map(o => ({
+        id: o.id,
+        date: o.createdAt?.toDate?.()?.toLocaleString() || "N/A",
+        customerName: o.customerName,
+        phone: o.customerPhone,
+        address: o.customerAddress,
+        items: o.items?.map(i => `${i.qty}x ${i.name}`).join(", ") || "",
+        total: `$${o.total.toFixed(2)}`,
+        status: o.status
+      }))
+
+      const res = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      })
+
+      const data = await res.json()
+      if (data.status === "success") {
+        for (const order of filtered) {
+          await deleteOrder(order.id)
+        }
+        alert(`Successfully exported and deleted ${data.count} orders!`)
+      } else {
+        alert("Failed to export: " + (data.message || "Unknown error"))
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message + "\n\nMake sure your Web App access is set to 'Anyone'.")
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   return (
     <div style={{ fontFamily: "'Inter', sans-serif" }}>
       <style>{`
@@ -198,14 +246,23 @@ export default function DashboardOrdersPage() {
           <h1 style={{ fontSize: "20px", fontWeight: 700, color: "#111", margin: "0 0 3px", letterSpacing: "-0.3px" }}>Orders</h1>
           <p style={{ fontSize: "13px", color: "#9ca3af", margin: 0 }}>Auto-confirms pending orders after 2 min</p>
         </div>
-        {newOrdersCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "7px", backgroundColor: "#fef2f2", border: "1.5px solid #fecaca", borderRadius: "9px", padding: "7px 14px" }}>
-            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ef4444", animation: "newpulse 0.8s infinite" }} />
-            <span style={{ fontSize: "12px", fontWeight: 700, color: "#ef4444", fontFamily: "'Inter', sans-serif" }}>
-              {newOrdersCount} new order{newOrdersCount > 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
+        <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+          {newOrdersCount > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "7px", backgroundColor: "#fef2f2", border: "1.5px solid #fecaca", borderRadius: "9px", padding: "7px 14px" }}>
+              <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "#ef4444", animation: "newpulse 0.8s infinite" }} />
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#ef4444", fontFamily: "'Inter', sans-serif" }}>
+                {newOrdersCount} new order{newOrdersCount > 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+          <button 
+            onClick={handleExportAndCleanup} 
+            disabled={isExporting}
+            style={{ padding: "8px 14px", borderRadius: "9px", border: "1.5px solid #d1d5db", backgroundColor: "#fff", color: "#374151", fontWeight: 600, fontSize: "12px", cursor: isExporting ? "not-allowed" : "pointer", fontFamily: "'Inter', sans-serif", opacity: isExporting ? 0.7 : 1, transition: "all 0.2s" }}
+          >
+            {isExporting ? "Exporting..." : "📤 Export & Cleanup"}
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}

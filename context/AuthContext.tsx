@@ -1,6 +1,6 @@
 "use client"
 import { createContext, useContext, useEffect, useState, ReactNode } from "react"
-import { auth } from "@/lib/firebase"
+import { adminAuth } from "@/lib/firebase"
 import {
   signInWithEmailAndPassword, signOut,
   onAuthStateChanged, User
@@ -22,7 +22,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(adminAuth, (u) => {
       setUser(u)
       setLoading(false)
     })
@@ -32,7 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (email: string, password: string) => {
     setError(null)
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      await signInWithEmailAndPassword(adminAuth, email, password)
     } catch (err: any) {
       const messages: Record<string, string> = {
         "auth/invalid-credential": "Invalid email or password.",
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = async () => {
-    await signOut(auth)
+    await signOut(adminAuth)
     setUser(null)
   }
 
